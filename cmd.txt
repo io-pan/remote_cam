@@ -1,0 +1,126 @@
+react-native init xxx 
+adb devices
+
+android avd
+cd d:\dev\app\sol 
+# react-native start
+react-native run-android
+react-native run-android --variant=release 
+
+GENERER APK  	https://facebook.github.io/react-native/docs/signed-apk-android.html
+	(kill server)
+
+    keytool -genkey -v -keystore sol-release-key.keystore -alias solapp -keyalg RSA -keysize 2048 -validity 10000
+
+	react-native bundle --platform android --dev false --entry-file index.js \ --bundle-output  android/app/src/main/assets/index.android.bundle \ --assets-dest android/app/src/main/res/
+    react-native bundle --dev false --platform android --entry-file index.js   --bundle-output ./android/app/build/intermediates/assets/debug/index.android.bundle --assets-dest ./android/app/build/intermediates/res/merged/debug
+
+	copier XXX-release-key.keystore dans XXX\android\app
+	...https://facebook.github.io/react-native/docs/signed-apk-android.html
+	
+
+react-native bundle --platform android --dev false --entry-file index.android.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res/
+
+
+
+cd android
+gradlew assembleRelease  --console plain 
+gradlew assembleDebug
+ => YourProjectName\android\app\build\outputs\apk
+
+gradle.properties
+    android.useDeprecatedNdk=true
+    MYAPP_RELEASE_STORE_FILE=sol-release-key.keystore
+    MYAPP_RELEASE_KEY_ALIAS=solapp
+    MYAPP_RELEASE_STORE_PASSWORD=B3ssiere.3
+    MYAPP_RELEASE_KEY_PASSWORD=B3ssiere.3
+    
+adb reverse tcp:8081 tcp:8081
+
+DEBUG GOOGLE MAP API
+	keytool -list -v -keystore "%USERPROFILE%\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
+	42:FF:E1:F3:DA:B8:A1:8F:D0:72:8B:C5:1B:92:E2:76:D9:14:92:F5
+
+RELEASE GOOGLE MAP API
+	D:\dev\app\SOL\android\app>keytool -list -v -keystore sol-release-key.keystore
+
+react-native-git-upgrade
+react-native upgrade
+
+    
+react-native init SOL
+cd SOL
+npm i react-native-image-pan-zoom --save
+
+npm add @babel/runtime
+npm i rn-splash-screen --save
+inutile ici manifest=>android:screenOrientation="portrait" npm i react-native-orientation --save
+npm i react-native-localization --save
+npm i react-native-vector-icons --save
+    Note: D:\dev\app\SOL\node_modules\react-native-localization\android\src\main\java\com\babisoft\ReactNativeLocalization\ReactNativeLocalization.java uses or overrides a deprecated API.
+    Note: Recompile with -Xlint:deprecation for details.
+npm i react-native-exit-app --save
+npm i react-native-keep-screen-on --save
+npm i rn-fetch-blob --save
+    Note: D:\dev\app\SOL\node_modules\rn-fetch-blob\android\src\main\java\com\RNFetchBlob\RNFetchBlobUtils.java uses or overrides a deprecated API.
+    Note: Recompile with -Xlint:deprecation for details.
+npm i react-native-camera --save
+   !! get FOV
+npm i react-native-device-info --save
+    Execution failed for task ':app:preDebugBuild'.
+    > Android dependency 'com.android.support:support-v4' has different version for the compile (26.1.0) and runtime (27.1.1) classpath. You should manually set the same version via DependencyResolution
+    => https://stackoverflow.com/questions/44653261/android-dependency-has-different-version-for-the-compile-and-runtime
+    ajout android/build.gradle
+    subprojects {
+        project.configurations.all {
+        ...
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'com.android.support'
+                    && !details.requested.name.contains('multidex') ) {
+                details.useVersion "26.1.0"
+            }
+        }
+npm i react-native-datepicker --save
+npm i  react-native-sensor-manager --save
+inutile : maps.googleapis.com/maps/api/geocode/     npm i  react-native-geocoder --save
+npm install react-native-android-location-services-dialog-box --save
+npm i react-native-maps   --save
+
+
+npm install @react-native-community/async-storage --save
+npm install @react-native-community/slider --save
+
+react-native link
+
+edit D:\dev\app\sol3\android\app\src\main\AndroidManifest.xml
+	  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+      <meta-data
+        android:name="com.google.android.geo.API_KEY"
+        android:value="AIzaSyAySV-_NvIHbs2Fw1Eh32ErfC6dUGRmzZ4"
+      />
+    </application>
+copy
+	D:\dev\app\sol2\node_modules\react-native-camera\android\src\main\java\com\lwansbrough\RCTCamera\RCTCameraModule.java
+	D:\dev\app\sol3\node_modules\react-native-camera\index.js
+edit index.android.js
+	AppRegistry.registerComponent('solxx', () => SOL);
+
+
+
+
+react-native link react-native-orientation 
+react-native link react-native-localization 
+react-native link react-native-exit-app 
+react-native link react-native-keep-screen-on 
+react-native link rn-fetch-blob 
+
+
+react-native unlink react-native-device-info 
+react-native unlink react-native-datepicker 
+react-native unlink react-native-vector-icons 
+react-native unlink  react-native-sensor-manager 
+
+react-native unlink  react-native-geocoder 
+react-native unlink  react-native-orientation 
+
+
