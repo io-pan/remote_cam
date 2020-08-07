@@ -10,6 +10,8 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Arguments;
 
 import com.facebook.react.bridge.Callback;
 import android.content.Intent;
@@ -17,13 +19,14 @@ import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.Environment;
 
-import  android.content.Context;
+import android.content.Context;
 import androidx.core.content.ContextCompat;
 
 import java.io.IOException;
 import java.io.File;
+import java.io.OutputStream;
 import java.io.FileOutputStream;
-// import java.io.FileInputStream;
+import java.io.FileInputStream;
   import android.content.res.Resources;
 import java.util.Locale;
 import java.util.List;
@@ -35,8 +38,10 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.media.MediaMetadataRetriever;
 
 import android.util.Base64;
+import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import android.media.ExifInterface;
 
@@ -401,5 +406,50 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
       else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_270) {  return 270; }            
       return 0;    
    }
+
+  @ReactMethod
+  public void getVideoThumb(String filePath, Promise promise) {
+    filePath = filePath.replace("file://","");
+    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+    retriever.setDataSource(filePath);
+    Bitmap image = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+
+    // ioPan
+    String fullPath = filePath.substring(0, filePath.lastIndexOf("/") ) + "/thumbs";
+
+    try {
+      File dir = new File(fullPath);
+      if (!dir.exists()) {
+        dir.mkdirs();
+      }
+
+      OutputStream fOut = null;
+
+      String fileName = filePath.substring(filePath.lastIndexOf("/")+1 ) + ".jpeg";
+
+      File file = new File(fullPath, fileName);
+      file.createNewFile();
+      fOut = new FileOutputStream(file);
+
+      // 100 means no compression, the lower you go, the stronger the compression
+      image.compress(Bitmap.CompressFormat.JPEG, 80, fOut);
+      fOut.flush();
+      fOut.close();
+
+      // MediaStore.Images.Media.insertImage(reactContext.getContentResolver(), file.getAbsolutePath(), file.getName(), file.getName());
+
+      WritableMap map = Arguments.createMap();
+
+      map.putString("path", "file://" + fullPath + '/' + fileName);
+      map.putDouble("width", image.getWidth());
+      map.putDouble("height", image.getHeight());
+
+      promise.resolve(map);
+
+    } catch (Exception e) {
+      Log.e("E_RNThumnail_ERROR", e.getMessage());
+      promise.reject("E_RNThumnail_ERROR", e);
+    }
+  }
 }
 

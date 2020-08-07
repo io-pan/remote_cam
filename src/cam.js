@@ -24,7 +24,6 @@ import RNFetchBlob from 'rn-fetch-blob';
 import { RNCamera } from 'react-native-camera';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
-import RNThumbnail from 'react-native-thumbnail';
 import Svg, { Ellipse,} from 'react-native-svg';
 // import ViewShot from "react-native-view-shot";
 
@@ -61,6 +60,9 @@ class Draggable extends Component { // Motion mask handles
       pan: new Animated.ValueXY(),
       opacity: new Animated.Value(1)
     };
+
+    this.pictureRequested = false;
+
     this.initialPos = props.initialPos ? props.initialPos : {x:0,y:0};
 
     this._val = { x:0, y:0 }
@@ -312,22 +314,24 @@ export default class Cam extends Component<Props> {
           try {
             this.setState({ isTakingPicture: true }); 
             var picture = await this.camera.takePictureAsync(options);
-            // console.log(picture);
-
+          
+            //console.log('src', picture.uri.replace('file://',''));
             const filename = 
               (this.props.path || RNFetchBlob.fs.dirs.DCIMDir)
               + '/' 
               + date2folderName()
               + '.jpg'
             ;
-            // console.log(filename);
+            //console.log('dest',filename);
 
             RNFetchBlob.fs.mv(
               picture.uri.replace('file://',''),
               filename
             ).then(() => {
+              this.props.onPictureTaken('file://' + filename);
               this.setState({ isTakingPicture: false });
 
+              
               // Go on according to requested motion-action.
               console.log(this.motionPhotoNumber + ' ' +this.state.motionAction.photoNumber);
               if (this.motionPhotoNumber){
@@ -381,7 +385,22 @@ export default class Cam extends Component<Props> {
     }
   }
 
+// takeVideo = async () => {
+//     const { isRecording } = this.state;
+//     if (this.camera && !isRecording) {
+//       try {
+//         const promise = this.camera.recordAsync(this.state.recordOptions);
 
+//         if (promise) {
+//           this.setState({ isRecording: true });
+//           const data = await promise;
+//           console.warn('takeVideo', data);
+//         }
+//       } catch (e) {
+//         console.error(e);
+//       }
+//     }
+//   };
   async takeVideo() {
     if (this.camera) {
       try {
@@ -394,7 +413,7 @@ export default class Cam extends Component<Props> {
 
         const promise = this.camera.recordAsync({
           path: filename,
-          maxDuration: this.motionActionVideo ? this.state.motionAction.videoLength : 60,
+          maxDuration: this.motionActionVideo ? this.state.motionAction.videoLength : 60, // TODO param 60
         });
 
         if (promise) {
@@ -403,7 +422,8 @@ export default class Cam extends Component<Props> {
           }
           this.setState({ isRecording: true });
 
-          const {uri} = await promise;
+          const data = await promise;
+console.log('video promise',data)
 
           if (this.stopRecordRequested || this.motionActionVideo) {
             this.motionActionRunning = false;
@@ -418,18 +438,21 @@ export default class Cam extends Component<Props> {
           }
 
           // Store video thumb.
-          RNThumbnail.get(filename).then((result) => {
-            if(result && result.path){
-              const thumbDest = filename.replace('.mp4', '.jpg');
-             RNFetchBlob.fs.mv(
-                result.path.replace('file://',''),
-                thumbDest
-              ).then(() => {
-                // console.log(thumbDest);
-              }).catch((err) => { 
-                // console.log('error move video thumb', err);
-              });
-            }
+          NativeModules.RNioPan.getVideoThumb(filename).then((result) => {
+
+            console.log('thumb',result);
+
+            // if(result && result.path){
+            //   const thumbDest = filename.replace('.mp4', '.jpg');
+            //  RNFetchBlob.fs.mv(
+            //     result.path.replace('file://',''),
+            //     thumbDest
+            //   ).then(() => {
+            //      console.log('thumbDest',thumbDest);
+            //   }).catch((err) => { 
+            //      console.log('error move video thumb', err);
+            //   });
+            // }
           });
         }
       }
@@ -1195,6 +1218,11 @@ export default class Cam extends Component<Props> {
   }
 
   renderCamera() {
+    // TODO:
+    // if(this.state.connectedTo && this.camRequested){
+    //   this.camRequested = false;
+    //   this.sendMessage(this.state.connectedTo, 'distantcam', true);
+    // }
 
     return (
       <View //ViewShot
@@ -1309,8 +1337,22 @@ export default class Cam extends Component<Props> {
     });
   }
 
+  toggleView(view) {
+    this.setState({cam:view});
+  }
+
+  // pickPhoto(field){
+  //   // alert(collection_id + ' '+ field)
+  //   this.setState({cam:'collection--' + field});
+  // }
+
+  // pickInsectPhoto(path, collection_id, session_id, insectKind_id, insect_id){
+  //   // alert(collection_id + ' '+  session_id + ' '+  insectKind_id + ' '+  insect_id)
+  //   this.setState({cam:'collection--' + path + '--' + collection_id +'--'+ session_id + '--'+  insectKind_id + '--'+  insect_id });
+  // }
 
   render() {
+    console.log(this.state.cam);
     return (
       <View style={styles.container}>
 
