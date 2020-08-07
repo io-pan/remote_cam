@@ -347,8 +347,8 @@ export default class Cam extends Component<Props> {
               
               // Send photo to distant device.
               if(this.pictureRequested){
-               this.sendMessage(this.state.connectedTo, 'img', picture.base64);
                this.pictureRequested = false;
+               this.props.onRequestedPictureTaken(picture.base64);
               }
 
               // Send photo back to form.
@@ -439,20 +439,7 @@ console.log('video promise',data)
 
           // Store video thumb.
           NativeModules.RNioPan.getVideoThumb(filename).then((result) => {
-
             console.log('thumb',result);
-
-            // if(result && result.path){
-            //   const thumbDest = filename.replace('.mp4', '.jpg');
-            //  RNFetchBlob.fs.mv(
-            //     result.path.replace('file://',''),
-            //     thumbDest
-            //   ).then(() => {
-            //      console.log('thumbDest',thumbDest);
-            //   }).catch((err) => { 
-            //      console.log('error move video thumb', err);
-            //   });
-            // }
           });
         }
       }

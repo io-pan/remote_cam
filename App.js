@@ -21,6 +21,7 @@ import FastImage from 'react-native-fast-image'
 
 import Cam from "./src/cam"
 import { colors } from "./src/colors"
+import { date2folderName } from './src/formatHelpers.js';
 
 const previewHeight = 264;
 const previewWidth = 200;
@@ -174,23 +175,7 @@ export default class App extends Component<Props> {
 
                 RNFetchBlob.fs.mkdir(value.path +'/local')
                 .then(() => { 
-                  // OK create thumb dir.
-
-                  // RNFetchBlob.fs.mkdir(value.path +'/local/thumbs')
-                  // .then(() => { 
-                  //   // OK create thumb dir.
-
-                    
-                  // })
-                  // .catch((err) => { 
-                  //   Alert.alert(
-                  //     'Erreur',
-                  //     'Le dossier de stockage des photos pour l\'appareil local n\'a pu être créé.\n'
-                  //     + value.path +'/local'
-                  //     //+ err
-                  //   );
-                  // })
-
+                  // OK // video thumb dir created on the fly.
                 })
                 .catch((err) => { 
                   Alert.alert(
@@ -266,15 +251,43 @@ export default class App extends Component<Props> {
 
   Connected = (user) => {
     // Alert.alert(JSON.stringify({'Connected':user}, undefined, 2));
+
+    console.log('Connected',user)
+
     let devices = this.state.devices;
     devices.forEach((item, index)=>{
       if (item.id == user.id){
         devices[index] = user;
         this.setState({devices:devices, connectedTo:user.id})
+        
+        // Create folder for that device on each avalable storage.
+        this.state.storages.map((value) => {
+
+          RNFetchBlob.fs.isDir(value.path + '/' + user.name.replace(/ /g, "-"))
+          .then((isDir) => {
+            if(!isDir){
+
+              RNFetchBlob.fs.mkdir(value.path + '/' + user.name.replace(/ /g, "-"))
+              .then(() => { 
+                // OK .
+              })
+              .catch((err) => { 
+                Alert.alert(
+                  'Erreur',
+                  'Le dossier de stockage des photos pour l\'appareil distant n\'a pu être créé.\n'
+                  + value.path + '/' + user.name.replace(/ /g, "-")
+                  //+ err
+                );
+              })
+            }
+          })
+
+        });
         BluetoothCP.stopAdvertising();
         return;
       }
     });
+
   }
 
   connectToDevice(id){
@@ -335,8 +348,8 @@ export default class App extends Component<Props> {
       } 
       
       else if(msg.value=='takePicture'){
-        this.pictureRequested = true;
-        this.takePicture();
+        this.refs.cam.pictureRequested = true;
+        this.refs.cam.takePicture();
       }
 
       else if(msg.value=='viewShot' && this.refs.viewShot){
@@ -364,8 +377,31 @@ export default class App extends Component<Props> {
       }
     }
 
-    else if(msg.key == 'img') {
 
+    else if(msg.key == 'picture') {
+      // console.log(this.state.connectedTo)
+      // console.log(this.state.devices)
+      let deviceName = false;
+
+      this.state.devices.forEach((item, index)=>{
+        if (item.id == this.state.connectedTo){
+          deviceName = item.name.replace(/ /g, "-");
+        }
+      });
+      
+
+      if(deviceName){
+        NativeModules.RNioPan.base64toJPEG(
+          msg.value, 
+          this.state.storage+ '/'+ deviceName + '/'  + date2folderName() + '.jpg'
+        ).then((result) => {
+          // console.log('distantpicture',result);
+        });
+      }
+    }
+
+    else if(msg.key == 'img') {
+      
       this.distImageCount = this.distImageCount ? 0: 1;
       if(this.distImageCount==1){
         this.setState({distantPicture0:'data:image/png;base64,'+msg.value}, function(){
@@ -605,11 +641,12 @@ console.log('renderImageLocal',this.state.imgLocal);
           result:"base64",
         }}
       >
-      <Cam
+      <Cam ref="cam"
         mode='free'
         mode_={1}
         path = {this.state.storage+'/local'}
         onPictureTaken = {(pic) => this.onPictureTaken(pic)}
+        onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)}
       />
      </ViewShot> 
     );

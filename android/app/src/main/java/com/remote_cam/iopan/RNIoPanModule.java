@@ -30,6 +30,8 @@ import java.io.FileInputStream;
   import android.content.res.Resources;
 import java.util.Locale;
 import java.util.List;
+// import java.util.Base64;
+
 import android.location.Address;
 import android.location.Geocoder;
 
@@ -39,6 +41,7 @@ import android.graphics.Matrix;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.media.MediaMetadataRetriever;
+
 
 import android.util.Base64;
 import android.util.Log;
@@ -449,6 +452,23 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     } catch (Exception e) {
       Log.e("E_RNThumnail_ERROR", e.getMessage());
       promise.reject("E_RNThumnail_ERROR", e);
+    }
+  }
+
+
+  @ReactMethod
+  public void base64toJPEG(String encodedImg, String destinationPath, Promise promise) {
+               
+    String base64Image = encodedImg;//encodedImg.split(",")[1];
+    byte[] data = Base64.decode(base64Image.getBytes(), 0);
+ 
+    try (OutputStream stream = new FileOutputStream(destinationPath)) {
+        stream.write(data);
+        promise.resolve(destinationPath);
+
+    } catch (Exception e) {
+      Log.e("base64toJPEG", e.getMessage());
+      promise.reject("base64toJPEG", e);
     }
   }
 }
