@@ -36,31 +36,29 @@ export default class App extends Component<Props> {
       devices: [],
       connectedTo:false,
 
-      distantPicture:false,
-      distantPicture0:false,
-      distantPicture1:false,
-
       imgLocal: false,
-      imgTest:false,//'file:///'+RNFetchBlob.fs.dirs.DCIMDir+'/test.jpg',
-      distantcam:false,
 
-      previewing:false,
+      distantCam:false,
+      distantMask:false,
       distantRec:false,
       distantTakingPhoto:false,
       distantSnaping:false,
+      distantBattery:false,
+      previewing:false,
+        distantPreview0:false,
+        distantPreview1:false,
+        distantPreviewCurrent:0,
 
       cam:  'collection-form',
-
+      mask: false,
       storages: [],
       storage: false,
     };
 
     this.camRequested = false;
     this.stopRecordRequested = false;
-    this.distPicNumber = 0;
 
-    this.distImageCount = 0;
-
+    this.distantPreviewNumber = 0;
   }
 
   // TODO: re-think permissions.
@@ -94,21 +92,21 @@ export default class App extends Component<Props> {
     }
   }
 
-  testBattery(){
-      NativeModules.RNioPan.getBatteryInfo()
-      .then((battery) => {
-        if(!this.state.bigBlackMask){
-          this.setState({battery:battery});
-        }
-        if (battery.level < 15) {
-          // TODO send alert (to distant).
-        }
-      })
 
+  testBattery(){
+    NativeModules.RNioPan.getBatteryInfo()
+    .then((battery) => {
+      // console.log(battery); // {level: 94, charging: true}
+      this.setState({battery:battery}, function(){
+        this.sendMessage(this.state.connectedTo, 'battery', battery);
+      });
+
+      setTimeout(() => { this.testBattery() }, 60000);
+    })
   }
-  getBatteryLevel = (callback) => {
-    NativeModules.RNioPan.getBatteryStatus(callback);
-  }
+  // getBatteryLevel = (callback) => {
+  //   NativeModules.RNioPan.getBatteryStatus(callback);
+  // }
 
   componentDidMount() {
     StatusBar.setHidden(true);
@@ -136,15 +134,9 @@ export default class App extends Component<Props> {
         // XXHDPI: Portrait: 960px1600px.
         // XXXHDPI: Portrait: 1280px1920px
 
-    // this.getBatteryLevel(
-    //   (batteryLevel) => {
-    //     console.log(batteryLevel);
-    //   }
-    // );
 
-    // TODO move this to specific component.
-//   setInterval(() => {this.testBattery()}, 60000);
-    
+    this.testBattery();
+    // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
 
     BluetoothCP.advertise("WIFI");   // "WIFI", "BT", and "WIFI-BT"
     BluetoothCP.browse('WIFI');
@@ -153,7 +145,6 @@ export default class App extends Component<Props> {
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-
 
     this.getAvailableStorages();
   }
@@ -316,8 +307,8 @@ export default class App extends Component<Props> {
     }
 
     if( key=='cmd'){
-      if(value=='cam' && this.state.distantcam) {
-        this.setState({distantcam:false});
+      if(value=='cam' && this.state.distantCam) {
+        this.setState({distantCam:false});
       }
       else if(value=='takeSnap') {
         this.setState({distantSnaping:true});
@@ -340,11 +331,17 @@ export default class App extends Component<Props> {
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
     }
-    else if(msg.key == 'distantcam') { // for button.
-      this.setState({distantcam:msg.value});
+    else if(msg.key == 'distantCam') { // for button.
+      this.setState({distantCam:msg.value});
     }
     else if(msg.key == 'distantRec') { // for button.
       this.setState({distantRec:msg.value});
+    }
+    else if(msg.key == 'distantMask') { // for button.
+      this.setState({distantMask:msg.value});
+    }
+    else if(msg.key == 'battery') {
+      this.setState({distantBattery:msg.value});
     }
 
     else if(msg.key == 'cmd') {
@@ -362,6 +359,10 @@ export default class App extends Component<Props> {
         }
       } 
       
+      else if(msg.value=='toggleMask'){
+        this.toggleMask()
+      }
+
       else if(msg.value=='takePicture'){
         this.refs.cam.pictureRequested = true;
         this.refs.cam.takePicture();
@@ -429,19 +430,13 @@ export default class App extends Component<Props> {
 
     // Preview.
     else if(msg.key == 'img') { 
-      this.distImageCount = this.distImageCount ? 0: 1;
-      if(this.distImageCount==1){
-        this.setState({distantPicture0:'data:image/png;base64,'+msg.value}, function(){
-          // if(this.state.previewing){
-          //   this.sendMessage(this.state.connectedTo, 'cmd', 'viewShot');
-          // }
+      this.distantPreviewNumber = this.distantPreviewNumber ? 0: 1;
+      if(this.distantPreviewNumber==1){
+        this.setState({distantPreview0:'data:image/png;base64,'+msg.value}, function(){
         });
       }
       else {
-        this.setState({distantPicture1:'data:image/png;base64,'+msg.value}, function(){
-          // if(this.state.previewing){
-          //   this.sendMessage(this.state.connectedTo, 'cmd', 'viewShot');
-          // }
+        this.setState({distantPreview1:'data:image/png;base64,'+msg.value}, function(){
         });
       }
     }
@@ -455,86 +450,9 @@ export default class App extends Component<Props> {
     });
   }
 
-  toggleRecord(){
-    if(this.state.distantRec){
-      this.sendMessage(this.state.connectedTo, 'cmd', 'stopRecording');
-    }
-    else{
-      this.sendMessage(this.state.connectedTo, 'cmd', 'startRecording');
-    } 
-  }
-
-
-  renderOtherButtons(value){
-    // console.log('renderOtherButtons')
-    // console.log('distantcam',this.state.distantcam)
-    // console.log('connected',value.connected)
-    if(!value.connected || !this.state.distantcam) 
-      return null;
-
-    return (
-      <View>
-      <Button 
-        style={{ 
-          margin:1, 
-          height:40 ,
-          marginBottom:2,
-        }}
-        color={ this.state.previewing ? '#338433' : 'grey'}
-        title = 'Peview'
-        onPress = {() => this.togglePreview()}
-      />
-      <Button 
-        style={{ 
-          margin:1, 
-          height:40 ,
-          marginBottom:2,
-        }}
-        color={ this.state.distantTakingPhoto ? '#338433' : 'grey'}
-        title = 'PHOTO'
-        onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture')}
-
-      />
-      <Button 
-        style={{ 
-          margin:1, 
-          height:40 ,
-          marginBottom:2,
-        }}
-        color={ this.state.distantSnaping ? '#338433' : 'grey'}
-        title = 'SNAP' // so we can have a snap while recording.
-        onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takeSnap')}
-
-      />
-      <Button 
-        style={{ 
-          margin:1, 
-          height:40,
-          marginBottom:2,
-        }}
-        color= { this.state.distantRec ? '#843333' : 'grey'}
-        title = 'rec'
-        onPress = {() => this.toggleRecord()}
-      />
-      {/*     
-      <Button 
-        style={{ 
-          margin:1, 
-          height:40,
-          marginBottom:2,
-        }}
-        title = 'send toto'
-        onPress = {() => this.sendMessage(value.id, 'txt', 'toto')}
-      />
-      */}
-      </View>
-    );
-  }
-
   renderCamButton(value){
    
-    if(!value.connected) 
-      return null;
+    if(!value.connected) return null;
 
     return (
       <View>
@@ -545,12 +463,83 @@ export default class App extends Component<Props> {
         ><MaterialCommunityIcons 
             name='camera'
             size={30}
-            color={this.state.distantcam ? '#338433' : 'white'}
+            color={this.state.distantCam ? '#338433' : 'white'}
             backgroundColor='transparent'
         /></TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.button}
+          onPress={  () => this.sendMessage(value.id, 'cmd', 'toggleMask') }
+          underlayColor={colors.greenSuperLight}
+        ><MaterialCommunityIcons 
+            name='power-sleep'
+            size={30}
+            color={this.state.distantMask ? '#338433' : 'white'}
+            backgroundColor='transparent'
+        /></TouchableOpacity>
 
-      { this.renderOtherButtons(value) }
+        { !this.state.distantCam
+          ? null
+          : <View>
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40 ,
+                marginBottom:2,
+              }}
+              color={ this.state.previewing ? '#338433' : 'grey'}
+              title = 'Peview'
+              onPress = {() => this.togglePreview()}
+            />
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40 ,
+                marginBottom:2,
+              }}
+              color={ this.state.distantTakingPhoto ? '#338433' : 'grey'}
+              title = 'PHOTO'
+              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture')}
+
+            />
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40 ,
+                marginBottom:2,
+              }}
+              color={ this.state.distantSnaping ? '#338433' : 'grey'}
+              title = 'SNAP' // so we can have a snap while recording.
+              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takeSnap')}
+
+            />
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40,
+                marginBottom:2,
+              }}
+              color= { this.state.distantRec ? '#843333' : 'grey'}
+              title = 'rec'
+              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 
+                                                this.state.distantRec ? 'stopRecording':'startRecording')}
+            />
+
+
+
+            {/*     
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40,
+                marginBottom:2,
+              }}
+              title = 'send toto'
+              onPress = {() => this.sendMessage(value.id, 'txt', 'toto')}
+            />
+            */}
+            </View>
+        }
       </View>
     );
   }
@@ -560,7 +549,6 @@ export default class App extends Component<Props> {
     // if (this.state.imgLocal.length==0) return null;
     if (!this.state.imgLocal) return null;
 
-console.log('renderImageLocal',this.state.imgLocal);
     return(
        
       <View 
@@ -574,54 +562,49 @@ console.log('renderImageLocal',this.state.imgLocal);
     );
   }
 
-  swichDistantPicture(distPicNumber){
-    this.setState({distPicNumber:distPicNumber}, function(){
+  swichPreviewPicture(distantPreviewCurrent){
+    this.setState({distantPreviewCurrent:distantPreviewCurrent}, function(){
       if(this.state.previewing){
-
         // this.intervalHandle = setTimeout(() => {
             this.sendMessage(this.state.connectedTo, 'cmd', 'viewShot');
         // }, 5000);
-
       }
     });
   }
 
-  renderDistantPicture(){
-
-    if (!this.state.distantPicture0 && !this.state.distantPicture1) return null;
-
-    // console.log('-----renderDistantPicture')
-    // console.log('distPicNumber',this.state.distPicNumber)
+  renderPreview(){
+    if (!this.state.previewing) return null;
+    if (!this.state.distantPreview0 && !this.state.distantPreview1) return null;
 
     return(
       <View 
         style = {styles.captureLocalView}
         >
-        {!this.state.distantPicture0 
+        {!this.state.distantPreview0 
           ? null
           : <FastImage
-              style = {[styles.captureLocal, this.state.distPicNumber == 0 ? styles.zIndex0 :styles.zIndex1 ]}
+              style = {[styles.captureLocal, this.state.distantPreviewCurrent == 0 ? styles.zIndex0 :styles.zIndex1 ]}
               source={{
-                  uri: this.state.distantPicture0,
+                  uri: this.state.distantPreview0,
                   headers: { Authorization: 'someAuthToken' },
                   priority: FastImage.priority.high ,
               }}
               resizeMode={FastImage.resizeMode.contain}
               // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-              onLoad={e => this.swichDistantPicture(1)}
+              onLoad={e => this.swichPreviewPicture(1)}
             />
         }
-        {!this.state.distantPicture1
+        {!this.state.distantPreview1
           ? null
           : <FastImage
-              style = {[styles.captureLocal, this.state.distPicNumber == 0 ? styles.zIndex1 :styles.zIndex0 ]}
+              style = {[styles.captureLocal, this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 ]}
               source={{
-                  uri: this.state.distantPicture1,
+                  uri: this.state.distantPreview1,
                   headers: { Authorization: 'someAuthToken' },
                   priority: FastImage.priority.high ,
               }}
               resizeMode={FastImage.resizeMode.contain}
-              onLoad={e => this.swichDistantPicture(0)}
+              onLoad={e => this.swichPreviewPicture(0)}
             />
         }
 
@@ -632,18 +615,20 @@ console.log('renderImageLocal',this.state.imgLocal);
   toggleView(view) { // alwas 'free'
     if( this.state.cam == view) {
       this.setState({cam:'collection-form'}, function(){
-        this.sendMessage(this.state.connectedTo, 'distantcam', false);
+        this.sendMessage(this.state.connectedTo, 'distantCam', false);
       });
     }
     else {
       this.setState({cam:view}, function(){
-        this.sendMessage(this.state.connectedTo, 'distantcam', true);
+        this.sendMessage(this.state.connectedTo, 'distantCam', true);
       });
     }
   }
 
-  toggleBigBlackMask() {
-    this.setState({bigBlackMask:!this.state.bigBlackMask});
+  toggleMask() {
+    this.setState({mask:!this.state.mask}, function(){
+      this.sendMessage(this.state.connectedTo, 'distantMask', this.state.mask);
+    });
   }
 
 
@@ -654,16 +639,17 @@ console.log('renderImageLocal',this.state.imgLocal);
 
     if(this.state.connectedTo && this.camRequested){
       this.camRequested = false;
-      this.sendMessage(this.state.connectedTo, 'distantcam', true);
+      this.sendMessage(this.state.connectedTo, 'distantCam', true);
     }
 
-      // if(!this.state.cam) {
-      //   if(this.state.connectedTo && this.camRequested){
-      //     this.camRequested = false;
-      //     this.sendMessage(this.state.connectedTo, 'distantcam', false);
-      //   }
-      //   return null;     
-      // }
+    // if(!this.state.cam) {
+    //   if(this.state.connectedTo && this.camRequested){
+    //     this.camRequested = false;
+    //     this.sendMessage(this.state.connectedTo, 'distantCam', false);
+    //   }
+    //   return null;     
+    // }
+
     return (
       <ViewShot
         key="renderCamera"
@@ -707,7 +693,7 @@ console.log('renderImageLocal',this.state.imgLocal);
 
             <TouchableOpacity
               style={styles.button}
-              onPress = {() => this.toggleBigBlackMask()}
+              onPress = {() => this.toggleMask()}
               underlayColor={colors.greenSuperLight}
             ><MaterialCommunityIcons 
                  name='power-sleep' // MASK
@@ -717,47 +703,47 @@ console.log('renderImageLocal',this.state.imgLocal);
             /></TouchableOpacity>
 
             <View style={{ flexDirection:'row', flex:1}}>
-            { this.state.storages.map((value, index) =>
-              <TouchableOpacity 
-                key={index}
-                style={{padding:5,
-                  flexDirection:'row', flex:0.5, justifyContent:'center', alignItems:'center',
-                }}
-                onPress = {() => this.setStorage(value)} 
-                >
-                <MaterialCommunityIcons
-                  name={ value.type=='phone' ? "cellphone-android" : "micro-sd" }
-                  style={{
-                    backgroundColor:'transparent',
-                    // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
-                    color:this.state.storage==value.path ? colors.greenFlash :'grey',
+              { this.state.storages.map((value, index) =>
+                <TouchableOpacity 
+                  key={index}
+                  style={{padding:5,
+                    flexDirection:'row', flex:0.5, justifyContent:'center', alignItems:'center',
                   }}
-                  size={25}
-                />
-                <Text style={{fontSize:16,
-                  color:this.state.storage==value.path ? colors.greenFlash :'grey',
-                  }}>
-                { /*value.type=='phone' ? "Téléphone" : "Carte SD" */}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+                  onPress = {() => this.setStorage(value)} 
+                  >
+                  <MaterialCommunityIcons
+                    name={ value.type=='phone' ? "cellphone-android" : "micro-sd" }
+                    style={{
+                      backgroundColor:'transparent',
+                      // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
+                      color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                    }}
+                    size={25}
+                  />
+                  <Text style={{fontSize:16,
+                    color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                    }}>
+                  { /*value.type=='phone' ? "Téléphone" : "Carte SD" */}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-          <TouchableOpacity
-            style={styles.button}
-            onPress = {() => this.toggleView('free')}
-            underlayColor={colors.greenSuperLight}
-          ><MaterialCommunityIcons 
-               name='camera'
-               size={30}
-               color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
-               backgroundColor='transparent'
-          /></TouchableOpacity>
+            <TouchableOpacity
+              style={styles.button}
+              onPress = {() => this.toggleView('free')}
+              underlayColor={colors.greenSuperLight}
+            ><MaterialCommunityIcons 
+                 name='camera'
+                 size={30}
+                 color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
+                 backgroundColor='transparent'
+            /></TouchableOpacity>
  
 
           </ScrollView>
         </View> 
 
-        <ScrollView style={{backgroundColor:'grey', paddingBottom:200}}>
+      <ScrollView style={{backgroundColor:'grey', paddingBottom:200}}>
 
         { this.state.cam == 'collection-form' || this.state.cam =='login'
           ? null
@@ -777,7 +763,10 @@ console.log('renderImageLocal',this.state.imgLocal);
                 height:40,
                 marginBottom:2,
               }}
-              title = {value.name}
+              title = {(this.state.distantBattery && this.state.distantBattery.level)
+                        ? value.name + ' ' + this.state.distantBattery.level + '%'
+                        : value.name
+                      }
               color = {value.connected ? '#338433' : 'grey'}
               onPress = {() => this.connectToDevice(value.id)}
             />
@@ -788,7 +777,7 @@ console.log('renderImageLocal',this.state.imgLocal);
 
 
         <View style={styles.containerPreview}>
-          { this.renderDistantPicture() }
+          { this.renderPreview() }
         </View>
          <View style={styles.containerPreview}>
           { this.renderImageLocal() }
@@ -797,7 +786,7 @@ console.log('renderImageLocal',this.state.imgLocal);
 
 
 
-      {this.state.bigBlackMask 
+      {this.state.mask 
       ? <TouchableOpacity ref="black_mask_to_save_battery"
           style={{
             position:'absolute', backgroundColor:'black', top:0,bottom:0,left:0,right:0,
@@ -805,7 +794,7 @@ console.log('renderImageLocal',this.state.imgLocal);
             alignItems: 'center',
             flexDirection:'row',
           }}
-          onPress = {() => this.toggleBigBlackMask()}
+          onPress = {() => this.toggleMask()}
         >
           <Text
             style={{
