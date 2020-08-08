@@ -385,22 +385,6 @@ export default class Cam extends Component<Props> {
     }
   }
 
-// takeVideo = async () => {
-//     const { isRecording } = this.state;
-//     if (this.camera && !isRecording) {
-//       try {
-//         const promise = this.camera.recordAsync(this.state.recordOptions);
-
-//         if (promise) {
-//           this.setState({ isRecording: true });
-//           const data = await promise;
-//           console.warn('takeVideo', data);
-//         }
-//       } catch (e) {
-//         console.error(e);
-//       }
-//     }
-//   };
   async takeVideo() {
     if (this.camera) {
       try {
@@ -421,6 +405,7 @@ export default class Cam extends Component<Props> {
             this.props.recording(true);
           }
           this.setState({ isRecording: true });
+
 
           const data = await promise;
 console.log('video promise',data)

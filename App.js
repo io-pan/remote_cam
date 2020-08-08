@@ -43,8 +43,11 @@ export default class App extends Component<Props> {
       imgLocal: false,
       imgTest:false,//'file:///'+RNFetchBlob.fs.dirs.DCIMDir+'/test.jpg',
       distantcam:false,
+
       previewing:false,
       distantRec:false,
+      distantTakingPhoto:false,
+      distantSnaping:false,
 
       cam:  'collection-form',
 
@@ -55,6 +58,8 @@ export default class App extends Component<Props> {
     this.camRequested = false;
     this.stopRecordRequested = false;
     this.distPicNumber = 0;
+
+    this.distImageCount = 0;
 
   }
 
@@ -309,8 +314,18 @@ export default class App extends Component<Props> {
     if(id){
       BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), id);
     }
-    if(this.state.distantcam &&  key=='cmd' && value=='cam') {
-      this.setState({distantcam:false});
+
+    if( key=='cmd'){
+      if(value=='cam' && this.state.distantcam) {
+        this.setState({distantcam:false});
+      }
+      else if(value=='takeSnap') {
+        this.setState({distantSnaping:true});
+      }
+      else if(value=='takePicture') {
+        this.setState({distantTakingPhoto:true});
+      }
+
     }
   }
 
@@ -320,7 +335,7 @@ export default class App extends Component<Props> {
     let msg = user.message;
     msg = JSON.parse(msg);
 
-    // console.log('receivedMessage',msg);
+    console.log('receivedMessage',msg);
 
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
@@ -352,23 +367,26 @@ export default class App extends Component<Props> {
         this.refs.cam.takePicture();
       }
 
+      else if(msg.value=='takeSnap'){
+        this.refs.viewShot.capture().then(uri => {
+          console.log('got snap request')
+          this.sendMessage(this.state.connectedTo, 'snap', uri);
+        });
+      }
+
       else if(msg.value=='viewShot' && this.refs.viewShot){
         this.refs.viewShot.capture().then(uri => {
-          this.sendMessage(this.state.connectedTo, 'img',uri);
-          // Copy snapshot.
-          // RNFetchBlob.fs.cp(uri.replace('file://',''), RNFetchBlob.fs.dirs.DCIMDir+'/' + Date.now()+ '.jpg')
-          // .then(() => {console.log('cop')})
-          // .catch(() => {console.log('cop err')})
+          this.sendMessage(this.state.connectedTo, 'img', uri);
         });
       }
 
       else if(msg.value=='startRecording'){
-        this.stopRecordRequested = false;
-        this.takeVideo();
+        this.refs.cam.stopRecordRequested = false;
+        this.refs.cam.takeVideo();
       }
       else if(msg.value=='stopRecording'){
-        this.stopRecordRequested = true;
-        this.camera.stopRecording();
+        this.refs.cam.stopRecordRequested = true;
+        this.refs.cam.camera.stopRecording();
       }
 
       else{
@@ -378,30 +396,39 @@ export default class App extends Component<Props> {
     }
 
 
-    else if(msg.key == 'picture') {
+    else if(msg.key == 'picture' || msg.key == 'snap') {
       // console.log(this.state.connectedTo)
       // console.log(this.state.devices)
-      let deviceName = false;
 
+      // Get the name of the device that sent the photo.
+      let deviceName = false;
       this.state.devices.forEach((item, index)=>{
         if (item.id == this.state.connectedTo){
           deviceName = item.name.replace(/ /g, "-");
         }
       });
       
-
+      // Store photo as JPEG in dedicated device folder.
       if(deviceName){
+        const fileName = this.state.storage+ '/'+ deviceName + '/'  +date2folderName() + '.jpg';
         NativeModules.RNioPan.base64toJPEG(
           msg.value, 
-          this.state.storage+ '/'+ deviceName + '/'  + date2folderName() + '.jpg'
+          fileName
         ).then((result) => {
-          // console.log('distantpicture',result);
+
+          // Output photo
+          this.setState({
+            imgLocal: 'file://' + fileName,
+            distantSnaping:false,
+            distantTakingPhoto:false,
+          })
         });
       }
     }
 
-    else if(msg.key == 'img') {
-      
+
+    // Preview.
+    else if(msg.key == 'img') { 
       this.distImageCount = this.distImageCount ? 0: 1;
       if(this.distImageCount==1){
         this.setState({distantPicture0:'data:image/png;base64,'+msg.value}, function(){
@@ -417,15 +444,9 @@ export default class App extends Component<Props> {
           // }
         });
       }
-
     }
   }
 
-  // todo: both options: snap & real picture
-  snap(){
-    this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture');
-  }
-  
   togglePreview(){
     this.setState({previewing:!this.state.previewing}, function(){
       if(this.state.previewing){
@@ -442,8 +463,6 @@ export default class App extends Component<Props> {
       this.sendMessage(this.state.connectedTo, 'cmd', 'startRecording');
     } 
   }
-
-
 
 
   renderOtherButtons(value){
@@ -471,9 +490,21 @@ export default class App extends Component<Props> {
           height:40 ,
           marginBottom:2,
         }}
-        color={ this.state.previewing ? '#338433' : 'grey'}
-        title = 'SNAP'
-        onPress = {() => this.snap()}
+        color={ this.state.distantTakingPhoto ? '#338433' : 'grey'}
+        title = 'PHOTO'
+        onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture')}
+
+      />
+      <Button 
+        style={{ 
+          margin:1, 
+          height:40 ,
+          marginBottom:2,
+        }}
+        color={ this.state.distantSnaping ? '#338433' : 'grey'}
+        title = 'SNAP' // so we can have a snap while recording.
+        onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takeSnap')}
+
       />
       <Button 
         style={{ 
@@ -598,12 +629,16 @@ console.log('renderImageLocal',this.state.imgLocal);
     );
   }
 
-  toggleView(view) {
+  toggleView(view) { // alwas 'free'
     if( this.state.cam == view) {
-      this.setState({cam:'collection-form'});
+      this.setState({cam:'collection-form'}, function(){
+        this.sendMessage(this.state.connectedTo, 'distantcam', false);
+      });
     }
     else {
-      this.setState({cam:view});
+      this.setState({cam:view}, function(){
+        this.sendMessage(this.state.connectedTo, 'distantcam', true);
+      });
     }
   }
 
@@ -645,15 +680,17 @@ console.log('renderImageLocal',this.state.imgLocal);
         mode='free'
         mode_={1}
         path = {this.state.storage+'/local'}
-        onPictureTaken = {(pic) => this.onPictureTaken(pic)}
-        onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)}
+        onPictureTaken = {(pic) => this.onPictureTaken(pic)} // local
+        onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)} //distant
+
+        recording =  {(isRecording) => this.sendMessage(this.state.connectedTo, 'distantRec', isRecording)}
       />
      </ViewShot> 
     );
   }
 
   onPictureTaken(pic){
-    console.log('onPictureTaken',pic);
+   console.log('onPictureTaken',pic);
     this.setState({imgLocal:pic})
   }
 
