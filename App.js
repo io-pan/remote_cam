@@ -73,6 +73,9 @@ export default class App extends Component<Props> {
         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+
+        // PermissionsAndroid.PERMISSIONS.BLUETOOTH, // permission is null
+        // PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
       ])
       if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
       &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
@@ -138,8 +141,8 @@ export default class App extends Component<Props> {
     this.testBattery();
     // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
 
-    BluetoothCP.advertise("WIFI");   // "WIFI", "BT", and "WIFI-BT"
-    BluetoothCP.browse('WIFI');
+    BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
+    BluetoothCP.browse('WIFI-BT');
     this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected)
     this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost)
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
@@ -148,6 +151,46 @@ export default class App extends Component<Props> {
 
     this.getAvailableStorages();
   }
+
+
+testPermissions= async () => {
+
+
+
+    try{
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+      ])
+      if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+      &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+      // &&  granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+      // &&  granted['android.permission.ACCESS_COARSE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+      // &&  granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
+      // &&  granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
+      ){
+         Alert.alert('PERMiSSION OK');
+      }
+      else {
+         Alert.alert('NO EPRMiSSION');
+        // Exit app.
+      }
+    } catch (err) {
+      Alert.alert(err);
+      console.warn(err)
+    }
+  
+}
+
 
   getAvailableStorages(){
     // console.log(RNFetchBlob.fs.dirs.CacheDir)
@@ -690,6 +733,19 @@ export default class App extends Component<Props> {
 
         <View style={styles.header}>
           <ScrollView horizontal={true}>
+
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress = {() => this.testPermissions()}
+              underlayColor={colors.greenSuperLight}
+            ><MaterialCommunityIcons 
+                 name='power-sleep' // MASK
+                 size={30}
+                 color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
+                 backgroundColor='transparent'
+            /></TouchableOpacity>
+
 
             <TouchableOpacity
               style={styles.button}
