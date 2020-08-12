@@ -1,5 +1,28 @@
 export const 
 
+  formatBytes = function(size, lang='en'){
+   
+    basedSuffix = lang=='en' ? "B" : "o";
+
+    if (size >= 1024) {
+        suffix = " K"+basedSuffix;
+        size /= 1024;
+        if (size >= 1024) {
+            suffix = " M"+basedSuffix;
+            size /= 1024;
+            if (size >= 1024) {
+              suffix = " G"+basedSuffix;
+              size /= 1024;
+              if (size >= 1024) {
+                suffix = " T"+basedSuffix;
+                size /= 1024;
+              }
+            }
+        }
+    }
+    return Math.round((size + Number.EPSILON) * 100) / 100 + suffix;
+  },
+
   date2folderName = function(){
     now = new Date();
     year = "" + now.getFullYear();

@@ -18,6 +18,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.Environment;
+import android.os.StatFs;
 
 import android.content.Context;
 import androidx.core.content.ContextCompat;
@@ -153,21 +154,54 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     successCallback.invoke(rv);
   }
 
+
+
+  public static long getAvailableInternalMemorySize(String path) {
+        //File path = Environment.getDataDirectory();
+        StatFs stat = new StatFs(path);// path.getPath()
+        long blockSize = stat.getBlockSize();
+        long availableBlocks = stat.getAvailableBlocks();
+        return availableBlocks * blockSize;
+    }
+
+    public static boolean externalMemoryAvailable() {
+        return android.os.Environment.getExternalStorageState().equals(android.os.Environment.MEDIA_MOUNTED);
+    }
+    public static long getAvailableExternalMemorySize(String path) {
+        if (externalMemoryAvailable()) {
+            //File path = Environment.getExternalStorageDirectory();
+            StatFs stat = new StatFs(path); // path.getPath()
+            long blockSize = stat.getBlockSize();
+            long availableBlocks = stat.getAvailableBlocks();
+            return availableBlocks * blockSize;
+        } else {
+            return 0;
+        }
+    }
+
   @ReactMethod
   public void getExternalStorages(final Promise promise) {
     try {
     
         String rv = "[";
         File[] aDirArray = ContextCompat.getExternalFilesDirs(mContext, null);
+
+        // @TOTO:
+        //  WritableMap map = Arguments.createMap();
+
         for(int i =0; i<aDirArray.length;i++){
           String type = "";
           if (Environment.isExternalStorageRemovable(aDirArray[i])){
             if (Environment.getExternalStorageState(aDirArray[i]).equals(Environment.MEDIA_MOUNTED)){
-              rv += "{\"type\":\"card\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\"}";
+              long freespace = getAvailableExternalMemorySize(aDirArray[i].getAbsolutePath());
+
+              rv += "{\"type\":\"card\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\",\"space\":\""+freespace+"\"}";
             }
           }
           else{
-            rv += "{\"type\":\"phone\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\"}";
+            long freespace = getAvailableInternalMemorySize(aDirArray[i].getAbsolutePath());
+
+            rv += "{\"type\":\"phone\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\",\"space\":\""+freespace+"\"}";
           }
 
           if(i<aDirArray.length-1){
@@ -175,28 +209,20 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
           }
         }
         rv += "]";
-        // if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-        //   File[] f;
-        //   rv += " --- getExternalMediaDirs: ";
-        //   f = mContext.getExternalMediaDirs();//mContext.getExternalMediaDirs()
-        //   for(int i =0; i<f.length;i++){
-        //     rv += f[i].getAbsolutePath() + " - ";
-        //   }
-
-        //   rv += " --- getExternalFilesDirs:";
-        //   f = mContext.getExternalFilesDirs(Environment.DIRECTORY_PICTURES);//mContext.getExternalMediaDirs()
-        //   for(int i =0; i<f.length;i++){
-        //     rv += f[i].getAbsolutePath() + " - ";
-        //   }
-
-        //   // rv += " --- getExternalCacheDirs: ";
-        //   // f = mContext.getExternalCacheDirs();//mContext.getExternalMediaDirs()
-        //   // for(int i =0; i<f.length;i++){
-        //   //   rv += f[i].getAbsolutePath() + " - ";
-        //   // }
 
 
-           promise.resolve(rv);
+        promise.resolve(rv);
+
+
+            // WritableMap map = Arguments.createMap();
+
+            // map.putString("path", "file://" + fullPath + '/' + fileName);
+            // map.putDouble("width", image.getWidth());
+            // map.putDouble("height", image.getHeight());
+
+            // promise.resolve(map);
+
+
         // } else {
         //     promise.reject("RNFetchBlob.getSDCardDir", "External storage not mounted");
         // }

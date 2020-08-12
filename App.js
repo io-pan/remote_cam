@@ -21,7 +21,7 @@ import FastImage from 'react-native-fast-image'
 
 import Cam from "./src/cam"
 import { colors } from "./src/colors"
-import { date2folderName } from './src/formatHelpers.js';
+import { date2folderName, formatBytes } from './src/formatHelpers.js';
 
 const previewHeight = 264;
 const previewWidth = 200;
@@ -49,6 +49,8 @@ export default class App extends Component<Props> {
         distantPreview1:false,
         distantPreviewCurrent:0,
 
+      previewDimensions:false,
+
       cam:  'collection-form',
       mask: false,
       storages: [],
@@ -59,6 +61,8 @@ export default class App extends Component<Props> {
     this.stopRecordRequested = false;
 
     this.distantPreviewNumber = 0;
+
+    this.previewScale=3;
   }
 
   // TODO: re-think permissions.
@@ -198,13 +202,25 @@ testPermissions= async () => {
 
     NativeModules.RNioPan.getExternalStorages()
     .then((dirs) => {
-      console.log('getAvailableStorages',JSON.parse(dirs));
-
       if(dirs.length) {
+        dirs = JSON.parse(dirs);
+        console.log('getAvailableStorages', dirs);
+
+        let maxSpace = 0;
+        let maxSpaceId = 0;
+        dirs.forEach(function(item, index){
+          console.log(formatBytes(item.space))
+          if (item.space > maxSpace){
+            maxSpace = item.space;
+            maxSpaceId = index;
+          }
+        });
+
         this.setState({
-          storages : JSON.parse(dirs),
-          storage:JSON.parse(dirs)[0].path,
+          storages : dirs,
+          storage:dirs[maxSpaceId].path,
         }, function(){
+
           // Create folders if not exists
           this.state.storages.map((value) => {
 
@@ -351,7 +367,14 @@ testPermissions= async () => {
 
     if( key=='cmd'){
       if(value=='cam' && this.state.distantCam) {
-        this.setState({distantCam:false});
+        
+        this.setState({
+          distantCam:false,
+          distantRec:false,
+          distantTakingPhoto:false,
+          distantSnaping:false,
+          previewing:false,
+        });
       }
       else if(value=='takeSnap') {
         this.setState({distantSnaping:true});
@@ -369,7 +392,7 @@ testPermissions= async () => {
     let msg = user.message;
     msg = JSON.parse(msg);
 
-    console.log('receivedMessage',msg);
+    //console.log('receivedMessage',msg);
 
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
@@ -386,6 +409,12 @@ testPermissions= async () => {
     else if(msg.key == 'battery') {
       this.setState({distantBattery:msg.value});
     }
+    else if(msg.key == 'camDimensions') {
+      this.setState({previewDimensions:{
+        w: msg.value.split('x')[0] / this.previewScale,
+        h: msg.value.split('x')[1] / this.previewScale,
+      }});
+    }
 
     else if(msg.key == 'cmd') {
 
@@ -393,6 +422,9 @@ testPermissions= async () => {
         if(this.state.cam=='free'){
           console.log('cam off')
           this.camRequested = false;
+
+          this.refs.cam.stopRecordRequested = true;
+          this.refs.cam.camera.stopRecording();
           this.setState({cam:'collection-form'});  
         }
         else {
@@ -621,12 +653,26 @@ testPermissions= async () => {
 
     return(
       <View 
-        style = {styles.captureLocalView}
+        style = {[styles.distantPreviewContainer,
+          
+          {
+          width:this.state.previewDimensions.w,
+          height:this.state.previewDimensions.h,
+          }]}
         >
         {!this.state.distantPreview0 
           ? null
           : <FastImage
-              style = {[styles.captureLocal, this.state.distantPreviewCurrent == 0 ? styles.zIndex0 :styles.zIndex1 ]}
+              style = {[
+                styles.distantPreviewImage, 
+                {
+                  width:this.state.previewDimensions.w,
+                  height:this.state.previewDimensions.h,
+                },
+                this.state.distantPreviewCurrent == 0 
+                ? styles.zIndex0 
+                :styles.zIndex1 
+              ]}
               source={{
                   uri: this.state.distantPreview0,
                   headers: { Authorization: 'someAuthToken' },
@@ -640,7 +686,10 @@ testPermissions= async () => {
         {!this.state.distantPreview1
           ? null
           : <FastImage
-              style = {[styles.captureLocal, this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 ]}
+              style = {[
+                styles.distantPreviewImage, 
+                this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 
+              ]}
               source={{
                   uri: this.state.distantPreview1,
                   headers: { Authorization: 'someAuthToken' },
@@ -698,7 +747,10 @@ testPermissions= async () => {
         key="renderCamera"
         ref="viewShot"
 
-       
+        onLayout={(event) => this.sendMessage(this.state.connectedTo,
+          'camDimensions',
+          event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
+        )}
         options={{
           format: "jpg", 
           quality:0.5,
@@ -707,25 +759,37 @@ testPermissions= async () => {
       >
       <Cam ref="cam"
         mode='free'
-        mode_={1}
+        //mode_={1}
         path = {this.state.storage+'/local'}
-        onPictureTaken = {(pic) => this.onPictureTaken(pic)} // local
+        onPictureTaken = {(path) => this.onPictureTaken(path)} // local
         onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)} //distant
-
         recording =  {(isRecording) => this.sendMessage(this.state.connectedTo, 'distantRec', isRecording)}
       />
      </ViewShot> 
     );
   }
 
-  onPictureTaken(pic){
-   console.log('onPictureTaken',pic);
-    this.setState({imgLocal:pic})
+  // camDimensions(event) {
+  //   this.sendMessage(
+  //     'camDimensions',
+  //     event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
+  //   );
+    // this.setState({camDimensions:{
+    //   w:event.nativeEvent.layout.width,
+    //   h:event.nativeEvent.layout.height,
+    // }});
+  // }
+
+
+  onPictureTaken(path){
+    // console.log('onPictureTaken',pic);
+    this.setState({imgLocal:path})
   }
 
   setStorage(val){
     this.setState({storage:val.path});
   }
+
   render() {
     // console.log('this.state.cam', this.state.cam);
     return (
@@ -734,7 +798,7 @@ testPermissions= async () => {
         <View style={styles.header}>
           <ScrollView horizontal={true}>
 
-
+            {/*
             <TouchableOpacity
               style={styles.button}
               onPress = {() => this.testPermissions()}
@@ -745,7 +809,7 @@ testPermissions= async () => {
                  color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
                  backgroundColor='transparent'
             /></TouchableOpacity>
-
+            */}
 
             <TouchableOpacity
               style={styles.button}
@@ -941,11 +1005,29 @@ const styles = StyleSheet.create({
     backgroundColor:'transparent',  
   },
 
+  distantPreviewContainer:{
+
+      width: previewWidth, 
+    height: previewHeight, 
+    borderColor: 'yellow',
+    position:'relative',
+    // opacity:0,
+  },
+  distantPreviewImage:{
+    position:'absolute',
+    top:0,
+    left:0,
+    // transform: [{ rotate: '90deg'}],
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'yellow',
+  },
+
   captureLocalView:{
     width: previewWidth, 
     height: previewHeight, 
   
-    borderColor: 'red',
+    borderColor: 'blue',
     position:'relative',
     // opacity:0,
   },
@@ -960,7 +1042,7 @@ const styles = StyleSheet.create({
     resizeMode: 'contain', //enum('cover', 'contain', 'stretch', 'repeat', 'center')
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'red',
+    borderColor: 'green',
 
   },
   zIndex0:{

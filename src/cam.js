@@ -181,8 +181,10 @@ export default class Cam extends Component<Props> {
     }];
 
 
+
     this.previewWidth = Dimensions.get('window').width;
     this.previewHeight = Dimensions.get('window').width*4/3;
+    
 
     this.camRequested = false;
     this.stopRecordRequested = false;
@@ -478,7 +480,7 @@ console.log('video promise',data)
               pointerEvents="none"
               style={styles.MotionContainer} 
               fadeDuration={0}
-              style = {[styles.motionpreview,{width:this.previewWidth, height:this.previewHeight}]}
+              style = {[styles.motionpreview,{/*width:this.previewWidth, height:this.previewHeight*/}]}
               source={{uri: 'data:image/png;base64,' + this.state.motionBase64}}
             />
           : null
@@ -794,7 +796,10 @@ console.log('video promise',data)
 
   renderCamActionButtons(){   
     return (
-      <View key="renderCamActionButtons" style={styles.iconButtonContainer} >
+      <View key="renderCamActionButtons" style={[styles.iconButtonContainer,
+        {
+         width: this.previewWidth,
+        }]} >
         <View style={styles.iconButton}>
         <MaterialCommunityIcons.Button   
           name='camera'
@@ -940,7 +945,7 @@ console.log('video promise',data)
                   de </Text>
                 <TextInput
                   keyboardType="number-pad"
-                  autoFocus={true}
+                  //autoFocus={true}
                   textAlign={'center'}
                   style={{backgroundColor:'white', width:30, height:30, borderWidth:1, borderColor:colors.greenDark, padding:0, margin:0}}
                   defaultValue={''+this.state.motionAction.photoNumber}
@@ -978,7 +983,7 @@ console.log('video promise',data)
                   de </Text>
                   <TextInput
                     keyboardType="number-pad"
-                    autoFocus={true}
+                    // autoFocus={true}
                     textAlign={'center'}
                     style={{backgroundColor:'white', width:30, height:30, borderWidth:1, borderColor:colors.greenDark, padding:0, margin:0}}
                     defaultValue={''+this.state.motionAction.videoLength}
@@ -1012,7 +1017,10 @@ console.log('video promise',data)
 
         <View></View>
 
-        <ScrollView horizontal={true} >
+        <ScrollView
+          style={{paddingTop:5, paddingBottom:5}}
+          horizontal={true}
+          >
 
           <TouchableOpacity 
             style={{
@@ -1425,6 +1433,10 @@ styles = StyleSheet.create({
 
   motionpreview:{
     position:'absolute',
+    top:0,
+    left:0,
+    right:0,
+    bottom:0,
     resizeMode: 'contain', //enum('cover', 'contain', 'stretch', 'repeat', 'center')
     backgroundColor: 'transparent',
     // borderWidth: 1,
@@ -1440,12 +1452,13 @@ styles = StyleSheet.create({
   },
 
   iconButtonContainer:{
-    flex:1,
+ 
+
     // backgroundColor:'rgba(100,100,100,0.5)',
     // position:'absolute',
     // bottom:20,
-    left:0,
-    right:0,
+
+
     padding:5,
     flexDirection:'row',
     // justifyContent: 'space-between',
