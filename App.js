@@ -8,6 +8,7 @@ import {Platform, StyleSheet, Text, View, Image,
   NativeModules,
   StatusBar,
   BackHandler,
+  Modal,
 } from 'react-native';
 
 import SplashScreen from "rn-splash-screen";
@@ -55,6 +56,8 @@ export default class App extends Component<Props> {
       mask: false,
       storages: [],
       storage: false,
+
+      modalStorage:false,
     };
 
     this.camRequested = false;
@@ -153,7 +156,7 @@ export default class App extends Component<Props> {
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
 
-    this.getAvailableStorages();
+    this.getAvailableStorages(true);
   }
 
 
@@ -196,7 +199,7 @@ testPermissions= async () => {
 }
 
 
-  getAvailableStorages(){
+  getAvailableStorages(setDefault){
     // console.log(RNFetchBlob.fs.dirs.CacheDir)
     // console.log(RNFetchBlob.fs.dirs.DCIMDir)
 
@@ -206,20 +209,24 @@ testPermissions= async () => {
         dirs = JSON.parse(dirs);
         console.log('getAvailableStorages', dirs);
 
-        let maxSpace = 0;
-        let maxSpaceId = 0;
-        dirs.forEach(function(item, index){
-          console.log(formatBytes(item.space))
-          if (item.space > maxSpace){
-            maxSpace = item.space;
-            maxSpaceId = index;
-          }
-        });
+        let updatedState;
+        if(setDefault){
+          let maxSpace = 0;
+          let maxSpaceId = 0;
+          dirs.forEach(function(item, index){
+            // console.log(formatBytes(item.space))
+            if (item.space > maxSpace){
+              maxSpace = item.space;
+              maxSpaceId = index;
+            }
+          });
+          updatedState = { storages : dirs, storage:dirs[maxSpaceId].path };
+        }
+        else {
+          updatedState = { storages : dirs, storage: false };
+        }
 
-        this.setState({
-          storages : dirs,
-          storage:dirs[maxSpaceId].path,
-        }, function(){
+        this.setState(updatedState, function(){
 
           // Create folders if not exists
           this.state.storages.map((value) => {
@@ -444,19 +451,22 @@ testPermissions= async () => {
       }
 
       else if(msg.value=='takeSnap'){
+        // this.refs.cam.refs.viewShotCam.capture().then(uri => {
+        //   this.sendMessage(this.state.connectedTo, 'snap', uri);
+        // });
         this.refs.viewShot.capture().then(uri => {
-          console.log('got snap request')
           this.sendMessage(this.state.connectedTo, 'snap', uri);
         });
       }
 
       else if(msg.value=='viewShot' && this.refs.viewShot){
         this.refs.viewShot.capture().then(uri => {
-          this.sendMessage(this.state.connectedTo, 'img', uri);
+          this.sendMessage(this.state.connectedTo, 'preview', uri);
         });
       }
 
       else if(msg.value=='startRecording'){
+        this.refs.cam.videoRequested = true;
         this.refs.cam.stopRecordRequested = false;
         this.refs.cam.takeVideo();
       }
@@ -474,7 +484,7 @@ testPermissions= async () => {
 
     else if(msg.key == 'picture' || msg.key == 'snap') {
       // console.log(this.state.connectedTo)
-      // console.log(this.state.devices)
+      console.log('--- recieve pictuer or snp or videothumb')
 
       // Get the name of the device that sent the photo.
       let deviceName = false;
@@ -493,18 +503,26 @@ testPermissions= async () => {
         ).then((result) => {
 
           // Output photo
+          console.log('picure', fileName)
           this.setState({
             imgLocal: 'file://' + fileName,
             distantSnaping:false,
             distantTakingPhoto:false,
           })
+        }).catch((err) => { 
+          Alert.alert(
+            'Erreur',
+            'base64toJPEG'
+            + value.path +'/local'
+            //+ err
+          );
         });
       }
     }
 
 
     // Preview.
-    else if(msg.key == 'img') { 
+    else if(msg.key == 'preview') { 
       this.distantPreviewNumber = this.distantPreviewNumber ? 0: 1;
       if(this.distantPreviewNumber==1){
         this.setState({distantPreview0:'data:image/png;base64,'+msg.value}, function(){
@@ -638,6 +656,7 @@ testPermissions= async () => {
   }
 
   swichPreviewPicture(distantPreviewCurrent){
+
     this.setState({distantPreviewCurrent:distantPreviewCurrent}, function(){
       if(this.state.previewing){
         // this.intervalHandle = setTimeout(() => {
@@ -671,7 +690,7 @@ testPermissions= async () => {
                 },
                 this.state.distantPreviewCurrent == 0 
                 ? styles.zIndex0 
-                :styles.zIndex1 
+                : styles.zIndex1 
               ]}
               source={{
                   uri: this.state.distantPreview0,
@@ -688,7 +707,11 @@ testPermissions= async () => {
           : <FastImage
               style = {[
                 styles.distantPreviewImage, 
-                this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 
+                this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 ,
+                {
+                  width:this.state.previewDimensions.w,
+                  height:this.state.previewDimensions.h,
+                },
               ]}
               source={{
                   uri: this.state.distantPreview1,
@@ -763,6 +786,7 @@ testPermissions= async () => {
         path = {this.state.storage+'/local'}
         onPictureTaken = {(path) => this.onPictureTaken(path)} // local
         onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)} //distant
+
         recording =  {(isRecording) => this.sendMessage(this.state.connectedTo, 'distantRec', isRecording)}
       />
      </ViewShot> 
@@ -782,7 +806,6 @@ testPermissions= async () => {
 
 
   onPictureTaken(path){
-    // console.log('onPictureTaken',pic);
     this.setState({imgLocal:path})
   }
 
@@ -822,6 +845,21 @@ testPermissions= async () => {
                  backgroundColor='transparent'
             /></TouchableOpacity>
 
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress = {() => this.showStorages()}
+              underlayColor={colors.greenSuperLight}
+            ><MaterialCommunityIcons 
+                 name='micro-sd'  
+                 size={30}
+                 color={ this.state.modalStorage ? colors.greenFlash : 'grey'}
+                 backgroundColor='transparent'
+            />
+            {/* TODO warn if batterie low level */}
+            </TouchableOpacity>
+
+
             <View style={{ flexDirection:'row', flex:1}}>
               { this.state.storages.map((value, index) =>
                 <TouchableOpacity 
@@ -843,7 +881,7 @@ testPermissions= async () => {
                   <Text style={{fontSize:16,
                     color:this.state.storage==value.path ? colors.greenFlash :'grey',
                     }}>
-                  { /*value.type=='phone' ? "Téléphone" : "Carte SD" */}</Text>
+                  {formatBytes(value.space)}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -908,14 +946,17 @@ testPermissions= async () => {
 
       {this.state.mask 
       ? <TouchableOpacity ref="black_mask_to_save_battery"
-          style={{
+           activeOpacity={1}
+           style={{
             position:'absolute', backgroundColor:'black', top:0,bottom:0,left:0,right:0,
             justifyContent: 'center',
             alignItems: 'center',
             flexDirection:'row',
           }}
-          onPress = {() => this.toggleMask()}
+          onLongPress = {() => this.toggleMask()}
         >
+
+        {/*         
           <Text
             style={{
               color:this.state.battery.charging ? colors.greenFlash : 'grey', 
@@ -937,16 +978,69 @@ testPermissions= async () => {
                 size={60}
               /> 
           }
+        */}
         </TouchableOpacity>
       :null
       }
 
+
+        <Modal
+        style={{marginTop:20}}
+          animationType="slide"
+          transparent={false}
+          visible={this.state.modalStorage}
+          onRequestClose={() => this.showStorages(false)}
+        >
+
+            <View style={{ flex:1}}>
+              { this.state.storages.map((value, index) =>
+                <TouchableOpacity 
+                  key={index}
+                  style={{padding:5,
+                    flexDirection:'row', flex:0.5, justifyContent:'center', alignItems:'center',
+                  }}
+                  onPress = {() => this.setStorage(value)} 
+                  >
+                  <MaterialCommunityIcons
+                    name={ value.type=='phone' ? "cellphone-android" : "micro-sd" }
+                    style={{
+                      backgroundColor:'transparent',
+                      // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
+                      color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                    }}
+                    size={25}
+                  />
+                  <Text style={{fontSize:16,
+                    color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                    }}>
+                  {formatBytes(value.space)}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+        </Modal>
+
+  
+
+
       </View>
     );
+  }
+
+  showStorages(visible) {
+    console.log('visible',visible)   
+    console.log('this.state.modalStorage',this.state.modalStorage);
+    if(visible === undefined || visible === null) {
+      visible = !this.state.modalStorage
+    }
+    console.log('visible',visible)   
+    console.log('this.state.modalStorage',this.state.modalStorage);
+    this.setState({modalStorage:visible});
   }
 }
 
 const styles = StyleSheet.create({ 
+  
+
   container: {
     flex: 1,
     backgroundColor:colors.background,

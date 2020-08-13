@@ -25,7 +25,7 @@ import { RNCamera } from 'react-native-camera';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
 import Svg, { Ellipse,} from 'react-native-svg';
-// import ViewShot from "react-native-view-shot";
+import ViewShot from "react-native-view-shot";
 
 import { date2folderName } from './formatHelpers.js';
 import { colors } from './colors';
@@ -62,6 +62,7 @@ class Draggable extends Component { // Motion mask handles
     };
 
     this.pictureRequested = false;
+    this.videoRequested = false;
 
     this.initialPos = props.initialPos ? props.initialPos : {x:0,y:0};
 
@@ -388,6 +389,16 @@ export default class Cam extends Component<Props> {
   }
 
   async takeVideo() {
+
+    /*
+    https://github.com/react-native-community/react-native-camera/blob/master/docs/RNCamera.md#recordasyncoptions-promise
+
+Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame Rate (48, 50, 60)
+2160p (4k)  35-45 Mbps  53-68 Mbps
+1440p (2k)  16 Mbps 24 Mbps
+1080p 8 Mbps  12 Mbps
+720p  5 Mbps  7.5 Mbps
+    */
     if (this.camera) {
       try {
 
@@ -400,6 +411,10 @@ export default class Cam extends Component<Props> {
         const promise = this.camera.recordAsync({
           path: filename,
           maxDuration: this.motionActionVideo ? this.state.motionAction.videoLength : 60, // TODO param 60
+//orientation:"landscapeLeft"
+          // quality // RNCamera.Constants.VideoQuality.2160p  ...
+          // videoBitrate // 5*1000*1000 would be 5Mbps.
+          //orientation "portrait", "portraitUpsideDown", "landscapeLeft" or "landscapeRight".
         });
 
         if (promise) {
@@ -408,9 +423,8 @@ export default class Cam extends Component<Props> {
           }
           this.setState({ isRecording: true });
 
-
           const data = await promise;
-console.log('video promise',data)
+          //console.log('video promise',data)
 
           if (this.stopRecordRequested || this.motionActionVideo) {
             this.motionActionRunning = false;
@@ -425,9 +439,30 @@ console.log('video promise',data)
           }
 
           // Store video thumb.
-          NativeModules.RNioPan.getVideoThumb(filename).then((result) => {
-            console.log('thumb',result);
-          });
+          NativeModules.RNioPan.getVideoThumb(filename)
+          .then((result) => {
+            // path", "file://" + fullPath + '/' + fileName);
+            // width
+            // height
+
+            if(this.videoRequested){
+
+              this.videoRequested = false;
+              NativeModules.RNioPan.JPEGtoBase64(result.path.replace('file://',''))
+              .then((base64) => {
+                this.props.onRequestedPictureTaken(base64);
+              })
+              .catch((err) => { 
+              });
+             
+            }
+            else {
+              this.props.onPictureTaken(result.path);
+            }
+
+            // console.log('thumb',result);
+          })
+          ;
         }
       }
       catch (err) {
@@ -798,7 +833,7 @@ console.log('video promise',data)
     return (
       <View key="renderCamActionButtons" style={[styles.iconButtonContainer,
         {
-         width: this.previewWidth,
+         width: this.previewWidth,height:120,
         }]} >
         <View style={styles.iconButton}>
         <MaterialCommunityIcons.Button   
@@ -1011,7 +1046,10 @@ console.log('video promise',data)
 
   renderMotionSetupButtons(){   
     return(  
-      <View key="renderMotionSetupButtons" style={{flex: 1, justifyContent:'space-between'}}>
+      <View 
+        key="renderMotionSetupButtons" 
+        style={{flex: 1, justifyContent:'space-between', height:120}}
+        >
 
         { this.renderMotionSetupItems() }
 
@@ -1205,13 +1243,13 @@ console.log('video promise',data)
     // }
 
     return (
-      <View //ViewShot
+      <ViewShot
         key="renderCamera"
-        ref="viewShot"
-        // options={{
-        //   format: "jpg", 
-        //   quality:1 ,
-        // }}
+        ref="viewShotCam"
+        options={{
+          format: "jpg", 
+          quality:0.5 ,
+        }}
       >
       <RNCamera
         ref={cam => (this.camera = cam)}
@@ -1270,7 +1308,7 @@ console.log('video promise',data)
 
        </RNCamera>
     
-      </View>
+      </ViewShot>
     );
   }
 
