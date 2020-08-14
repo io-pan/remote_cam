@@ -49,6 +49,7 @@ const MODE_RUN = 0;
 const MODE_OFF = -1;
 const MODE_SET = 1;
 
+const landmarkSize = 2;
 
 //----------------------------------------------------------------------------------------
 class Draggable extends Component { // Motion mask handles
@@ -143,6 +144,8 @@ export default class Cam extends Component<Props> {
         // 'motion-setup' (while setting motion parameters)
         // 'motion-running' (while session running) 
       // TODO: ? re-think views vs cam state to switch to form etc..
+
+      faces:[],
 
       // Pure layout needs.
       isRecording:false,
@@ -257,6 +260,49 @@ export default class Cam extends Component<Props> {
     // const getPreviewSize = await this.camera.getPreviewSize();
     // console.log(getPreviewSize);
   }
+
+                onFacesDetected = ({ faces }) => {
+                       console.log('FACE');
+                      console.log(faces);
+                      this.setState({ faces:faces });
+                    };
+
+                    onFaceDetectionError = state => console.warn('Faces detection error:', state);
+
+                    renderFace({ bounds, faceID, rollAngle, yawAngle }) {
+                      return (
+                        <View
+                          key={faceID}
+                          transform={[
+                            { perspective: 600 },
+                            { rotateZ: `${rollAngle.toFixed(0)}deg` },
+                            { rotateY: `${yawAngle.toFixed(0)}deg` },
+                          ]}
+                          style={[
+                            styles.face,
+                            {
+                              ...bounds.size,
+                              left: bounds.origin.x,
+                              top: bounds.origin.y,
+                            },
+                          ]}
+                        >
+                          {/*
+                          <Text style={styles.faceText}>ID: {faceID}</Text>
+                          <Text style={styles.faceText}>rollAngle: {rollAngle.toFixed(0)}</Text>
+                          <Text style={styles.faceText}>yawAngle: {yawAngle.toFixed(0)}</Text>
+                          */}
+                        </View>
+                      );
+                    }
+
+                    renderFaces() {
+                      return (
+                        <View style={styles.facesContainer} pointerEvents="none">
+                          {this.state.faces.map(this.renderFace)}
+                        </View>
+                      );
+                    }
 
   onMotionDetected = ({ motion }) => {
     // console.log('MOTION', motion);
@@ -396,6 +442,7 @@ export default class Cam extends Component<Props> {
     }
   }
 
+
   async takeVideo() {
 
     /*
@@ -438,19 +485,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
 
           const data = await promise;
           //console.log('video promise',data)
-
-          if (this.stopRecordRequested || this.motionActionVideo) {
-            this.motionActionRunning = false;
-            this.motionActionVideo = false;
-            if(this.props.recording){
-              this.props.recording(false);
-            }
-            this.setState({isRecording: false});
-          }
-          else {
-            this.takeVideo();
-          }
-
+console.log(data)
           // Store video thumb.
           NativeModules.RNioPan.getVideoThumb(filename)
           .then((result) => {
@@ -466,6 +501,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
                 this.props.onRequestedPictureTaken(base64);
               })
               .catch((err) => { 
+                alert('ERROR JPEGtoBase64');
               });
              
             }
@@ -479,8 +515,24 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
             }
 
             // console.log('thumb',result);
-          })
+          }).catch((err) => { 
+              alert('ERROR getVideoThumb ' + filename);
+          });
           ;
+
+          if (this.stopRecordRequested || this.motionActionVideo) {
+            this.motionActionRunning = false;
+            this.motionActionVideo = false;
+            if(this.props.recording){
+              this.props.recording(false);
+            }
+            this.setState({isRecording: false});
+          }
+          else {
+            this.takeVideo();
+          }
+
+
         }
       }
       catch (err) {
@@ -1293,6 +1345,11 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
             Math.floor(this.state.motionInputAreaStyle.width /this.state.sampleSize) +";"+
             Math.floor(this.state.motionInputAreaStyle.height /this.state.sampleSize) +";"
         }
+
+        // onFacesDetected={this.onFacesDetected}
+        // onFaceDetectionError={this.onFaceDetectionError}  
+        // faceDetectionLandmarks={RNCamera.Constants.FaceDetection.Landmarks.all}
+        // faceDetectionClassifications ={RNCamera.Constants.FaceDetection.Classifications.all}
         >
           <Slider  
             ref="zoom"
@@ -1323,7 +1380,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
         }
 
         {this.renderMotion()}
-
+   {this.renderFaces()}
        </RNCamera>
     
       </ViewShot>
@@ -1544,6 +1601,40 @@ styles = StyleSheet.create({
     backgroundColor:'transparent',  
   },
 
+  row: {
+    flexDirection: 'row',
+  },
+
+
+  facesContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    left: 0,
+    top: 0,
+  },
+  face: {
+    padding: 10,
+    borderWidth: 2,
+    borderRadius: 2,
+    position: 'absolute',
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  landmark: {
+    width: landmarkSize,
+    height: landmarkSize,
+    position: 'absolute',
+    backgroundColor: 'red',
+  },
+  faceText: {
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    margin: 10,
+    backgroundColor: 'transparent',
+  },
   row: {
     flexDirection: 'row',
   },

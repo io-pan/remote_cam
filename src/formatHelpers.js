@@ -2,8 +2,8 @@ export const
 
   formatBytes = function(size, lang='en'){
    
-    basedSuffix = lang=='en' ? "B" : "o";
-
+    const basedSuffix = lang=='en' ? "B" : "o";
+    let suffix = '';
     if (size >= 1024) {
         suffix = " K"+basedSuffix;
         size /= 1024;

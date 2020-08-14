@@ -11,6 +11,7 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.Arguments;
 
 import com.facebook.react.bridge.Callback;
@@ -155,77 +156,27 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
   }
 
 
-
-  public static long getAvailableInternalMemorySize(String path) {
-        //File path = Environment.getDataDirectory();
-        StatFs stat = new StatFs(path);// path.getPath()
-        long blockSize = stat.getBlockSize();
-        long availableBlocks = stat.getAvailableBlocks();
-        return availableBlocks * blockSize;
-    }
-
-    public static boolean externalMemoryAvailable() {
-        return android.os.Environment.getExternalStorageState().equals(android.os.Environment.MEDIA_MOUNTED);
-    }
-    public static long getAvailableExternalMemorySize(String path) {
-        if (externalMemoryAvailable()) {
-            //File path = Environment.getExternalStorageDirectory();
-            StatFs stat = new StatFs(path); // path.getPath()
-            long blockSize = stat.getBlockSize();
-            long availableBlocks = stat.getAvailableBlocks();
-            return availableBlocks * blockSize;
-        } else {
-            return 0;
-        }
-    }
-
   @ReactMethod
-  public void getExternalStorages(final Promise promise) {
+  public void getStorages(final Promise promise) {
     try {
-    
-        String rv = "[";
-        File[] aDirArray = ContextCompat.getExternalFilesDirs(mContext, null);
+      WritableArray rv = Arguments.createArray();
+      File[] aStorages = ContextCompat.getExternalFilesDirs(mContext, null);
 
-        // @TOTO:
-        //  WritableMap map = Arguments.createMap();
-
-        for(int i =0; i<aDirArray.length;i++){
-          String type = "";
-          if (Environment.isExternalStorageRemovable(aDirArray[i])){
-            if (Environment.getExternalStorageState(aDirArray[i]).equals(Environment.MEDIA_MOUNTED)){
-              long freespace = getAvailableExternalMemorySize(aDirArray[i].getAbsolutePath());
-
-              rv += "{\"type\":\"card\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\",\"space\":\""+freespace+"\"}";
-            }
-          }
-          else{
-            long freespace = getAvailableInternalMemorySize(aDirArray[i].getAbsolutePath());
-
-            rv += "{\"type\":\"phone\", \"path\":\""+aDirArray[i].getAbsolutePath()+"\",\"space\":\""+freespace+"\"}";
-          }
-
-          if(i<aDirArray.length-1){
-            rv += ",";
-          }
+      for (File storage : aStorages){
+        WritableMap map = Arguments.createMap();
+        
+        if( !Environment.isExternalStorageRemovable(storage) 
+            || Environment.getExternalStorageState(storage).equals(Environment.MEDIA_MOUNTED)) {
+          StatFs stat = new StatFs(storage.getAbsolutePath());
+          map.putDouble("free", stat.getAvailableBytes());
+          map.putDouble("total", stat.getTotalBytes());
+          map.putBoolean("removable",  Environment.isExternalStorageRemovable(storage));
+          map.putString("path",  storage.getAbsolutePath());
         }
-        rv += "]";
+        rv.pushMap(map);
+      }
+      promise.resolve(rv);
 
-
-        promise.resolve(rv);
-
-
-            // WritableMap map = Arguments.createMap();
-
-            // map.putString("path", "file://" + fullPath + '/' + fileName);
-            // map.putDouble("width", image.getWidth());
-            // map.putDouble("height", image.getHeight());
-
-            // promise.resolve(map);
-
-
-        // } else {
-        //     promise.reject("RNFetchBlob.getSDCardDir", "External storage not mounted");
-        // }
     } catch (Exception e) {
       promise.reject(e);
     }

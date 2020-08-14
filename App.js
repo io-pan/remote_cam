@@ -204,10 +204,9 @@ testPermissions= async () => {
     // console.log(RNFetchBlob.fs.dirs.CacheDir)
     // console.log(RNFetchBlob.fs.dirs.DCIMDir)
 
-    NativeModules.RNioPan.getExternalStorages()
+    NativeModules.RNioPan.getStorages()
     .then((dirs) => {
       if(dirs.length) {
-        dirs = JSON.parse(dirs);
         console.log('getAvailableStorages', dirs);
 
         let updatedState;
@@ -215,9 +214,8 @@ testPermissions= async () => {
           let maxSpace = 0;
           let maxSpaceId = 0;
           dirs.forEach(function(item, index){
-            // console.log(formatBytes(item.space))
-            if (item.space > maxSpace){
-              maxSpace = item.space;
+            if (item.free > maxSpace){
+              maxSpace = item.free;
               maxSpaceId = index;
             }
           });
@@ -259,7 +257,7 @@ testPermissions= async () => {
 
     })
     .catch((err) => { 
-      console.log('getExternalStorages ERROR', err) 
+      console.log('getStorages ERROR', err) 
     })
   }
 
@@ -652,14 +650,9 @@ testPermissions= async () => {
         <Image  
           style = {[
             styles.captureLocal,
-            this.state.imgLocalH
-            ? {
+            {
               height:this.state.imgLocalH/20,
               width:this.state.imgLocalW/20,
-            }
-            :{
-              height: (this.state.imgLocalLandscape) ? previewWidth : previewHeight ,
-              width: (this.state.imgLocalLandscape) ? previewHeight : previewWidth
             }
           ]}
           source={{uri:this.state.imgLocal}}
@@ -830,7 +823,7 @@ testPermissions= async () => {
   }
 
   setStorage(val){
-    this.setState({storage:val.path});
+    this.setState({storage:val.path, modalStorage:false});
   }
 
   render() {
@@ -879,7 +872,7 @@ testPermissions= async () => {
             {/* TODO warn if batterie low level */}
             </TouchableOpacity>
 
-
+            {/*
             <View style={{ flexDirection:'row', flex:1}}>
               { this.state.storages.map((value, index) =>
                 <TouchableOpacity 
@@ -890,7 +883,7 @@ testPermissions= async () => {
                   onPress = {() => this.setStorage(value)} 
                   >
                   <MaterialCommunityIcons
-                    name={ value.type=='phone' ? "cellphone-android" : "micro-sd" }
+                    name={ value.removable ? "micro-sd" : "cellphone-android" }
                     style={{
                       backgroundColor:'transparent',
                       // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
@@ -901,11 +894,11 @@ testPermissions= async () => {
                   <Text style={{fontSize:16,
                     color:this.state.storage==value.path ? colors.greenFlash :'grey',
                     }}>
-                  {formatBytes(value.space)}</Text>
+                  {formatBytes(value.free)}</Text>
                 </TouchableOpacity>
               )}
             </View>
-
+            */}
             <TouchableOpacity
               style={styles.button}
               onPress = {() => this.toggleView('free')}
@@ -1005,38 +998,51 @@ testPermissions= async () => {
 
 
         <Modal
-        style={{marginTop:20}}
+          style={{marginTop:20}}
           animationType="slide"
           transparent={false}
           visible={this.state.modalStorage}
           onRequestClose={() => this.showStorages(false)}
         >
-
+            <View style={{ flex:1}}></View>
             <View style={{ flex:1}}>
               { this.state.storages.map((value, index) =>
                 <TouchableOpacity 
                   key={index}
-                  style={{padding:5,
-                    flexDirection:'row', flex:0.5, justifyContent:'center', alignItems:'center',
+                  style={{
+                    padding:5,
+                    flexDirection:'row', 
+                    flex:1, 
+                    justifyContent:'center', 
+                    alignItems:'center',
                   }}
                   onPress = {() => this.setStorage(value)} 
                   >
                   <MaterialCommunityIcons
-                    name={ value.type=='phone' ? "cellphone-android" : "micro-sd" }
-                    style={{
+                    name={ value.removable ?  "micro-sd" : "cellphone-android" }
+                    style={{flexDirection:'column',
                       backgroundColor:'transparent',
                       // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
                       color:this.state.storage==value.path ? colors.greenFlash :'grey',
                     }}
-                    size={25}
-                  />
-                  <Text style={{fontSize:16,
-                    color:this.state.storage==value.path ? colors.greenFlash :'grey',
-                    }}>
-                  {formatBytes(value.space)}</Text>
+                    size={50}
+                  >
+                    <View>
+                      <Text style={{fontSize:14,
+                        color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                        }}>{formatBytes(value.total)}</Text>
+
+                      <Text style={{fontSize:16,
+                        color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                        }}>
+                      {formatBytes(value.free)} libre</Text>
+                    </View>
+                  </MaterialCommunityIcons>
+          
                 </TouchableOpacity>
               )}
             </View>
+            <View style={{ flex:1}}></View>
         </Modal>
 
   
