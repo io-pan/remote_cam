@@ -27,6 +27,20 @@ import { date2folderName, formatBytes } from './src/formatHelpers.js';
 const previewHeight = 264;
 const previewWidth = 200;
 
+const shareState = {
+      distantCam:false,
+      distantMask:false,
+      distantRec:false,
+      distantTakingPhoto:false,
+      distantSnaping:false,
+      distantBattery:false,
+      distantStorages:false,
+      previewing:false,
+        distantPreview0:false,
+        distantPreview1:false,
+        distantPreviewCurrent:0,
+        previewDimensions:false,
+};
 //-----------------------------------------------------------------------------------------
 export default class App extends Component<Props> {
 //-----------------------------------------------------------------------------------------
@@ -315,6 +329,9 @@ testPermissions= async () => {
 
     console.log('Connected',user)
 
+    this.sendMessage(user.id, 'battery', this.state.battery);
+    this.sendMessage(user.id, 'storages', this.state.storages);
+
     let devices = this.state.devices;
     devices.forEach((item, index)=>{
       if (item.id == user.id){
@@ -414,6 +431,9 @@ testPermissions= async () => {
     }
     else if(msg.key == 'battery') {
       this.setState({distantBattery:msg.value});
+    }
+    else if(msg.key == 'storages') {
+      this.setState({distantStorages:msg.value});
     }
     else if(msg.key == 'camDimensions') {
       this.setState({previewDimensions:{
@@ -1035,7 +1055,7 @@ testPermissions= async () => {
                       <Text style={{fontSize:16,
                         color:this.state.storage==value.path ? colors.greenFlash :'grey',
                         }}>
-                      {formatBytes(value.free)} libre</Text>
+                      {formatBytes(value.free)} {this._t('libres')}</Text>
                     </View>
                   </MaterialCommunityIcons>
           
@@ -1050,6 +1070,10 @@ testPermissions= async () => {
 
       </View>
     );
+  }
+
+  _t(str){
+    return str;
   }
 
   showStorages(visible) {

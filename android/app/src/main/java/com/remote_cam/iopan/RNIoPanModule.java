@@ -180,7 +180,6 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     } catch (Exception e) {
       promise.reject(e);
     }
-    
   }
 
   @ReactMethod
