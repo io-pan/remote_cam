@@ -15,7 +15,7 @@
     "react": "16.13.1",
     "react-native": "0.63.1",
     "react-native-bluetooth-cross-platform": "0.0.9",
-    "react-native-camera": "^3.35.0",
+    "react-native-camera": "^3.36.0",
     "react-native-fast-image": "^8.3.2",
     "react-native-fs": "^2.16.6",
     "react-native-keep-screen-on": "^1.2.0",

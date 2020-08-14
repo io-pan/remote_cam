@@ -317,8 +317,16 @@ export default class Cam extends Component<Props> {
           try {
             this.setState({ isTakingPicture: true }); 
             var picture = await this.camera.takePictureAsync(options);
-          
-            //console.log('src', picture.uri.replace('file://',''));
+             console.log('picture',picture);
+                  // width: returns the image's width (taking image orientation into account)
+                  // height: returns the image's height (taking image orientation into account)
+              // uri: (string) the path to the image saved on your app's cache directory.
+              // base64: (string?) the base64 representation of the image if required.
+              // exif: returns an exif map of the image if required.
+              // pictureOrientation: (number) the orientation of the picture
+              // deviceOrientation: (number) the orientation of the device
+
+
             const filename = 
               (this.props.path || RNFetchBlob.fs.dirs.DCIMDir)
               + '/' 
@@ -331,10 +339,10 @@ export default class Cam extends Component<Props> {
               picture.uri.replace('file://',''),
               filename
             ).then(() => {
-              this.props.onPictureTaken('file://' + filename);
+
+              this.props.onPictureTaken({ ...picture, uri:'file://' + filename });
               this.setState({ isTakingPicture: false });
 
-              
               // Go on according to requested motion-action.
               console.log(this.motionPhotoNumber + ' ' +this.state.motionAction.photoNumber);
               if (this.motionPhotoNumber){
@@ -418,6 +426,11 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
         });
 
         if (promise) {
+          // uri: (string) the path to the video saved on your app's cache directory.
+          // videoOrientation: (number) orientation of the video
+          // deviceOrientation: (number) orientation of the device
+          // isRecordingInterrupted: (boolean) whether the app has been minimized while recording
+
           if(this.props.recording){
             this.props.recording(true);
           }
@@ -457,7 +470,12 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
              
             }
             else {
-              this.props.onPictureTaken(result.path);
+              this.props.onPictureTaken({
+                ...data,
+                uri:result.path,
+                width:result.width,
+                height:result.height,
+              });
             }
 
             // console.log('thumb',result);

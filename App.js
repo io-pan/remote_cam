@@ -38,6 +38,7 @@ export default class App extends Component<Props> {
       connectedTo:false,
 
       imgLocal: false,
+      imgLocalLandscape: false,
 
       distantCam:false,
       distantMask:false,
@@ -501,7 +502,7 @@ testPermissions= async () => {
           msg.value, 
           fileName
         ).then((result) => {
-
+         console.log('base64toJPEG', result)
           // Output photo
           console.log('picure', fileName)
           this.setState({
@@ -640,6 +641,7 @@ testPermissions= async () => {
 
   renderImageLocal(){
     // if (this.state.imgLocal.length==0) return null;
+
     if (!this.state.imgLocal) return null;
 
     return(
@@ -648,7 +650,18 @@ testPermissions= async () => {
         style = {styles.captureLocalView}
         >
         <Image  
-          style = {styles.captureLocal}
+          style = {[
+            styles.captureLocal,
+            this.state.imgLocalH
+            ? {
+              height:this.state.imgLocalH/20,
+              width:this.state.imgLocalW/20,
+            }
+            :{
+              height: (this.state.imgLocalLandscape) ? previewWidth : previewHeight ,
+              width: (this.state.imgLocalLandscape) ? previewHeight : previewWidth
+            }
+          ]}
           source={{uri:this.state.imgLocal}}
         />
       </View>
@@ -784,7 +797,7 @@ testPermissions= async () => {
         mode='free'
         //mode_={1}
         path = {this.state.storage+'/local'}
-        onPictureTaken = {(path) => this.onPictureTaken(path)} // local
+        onPictureTaken = {(info) => this.onPictureTaken(info)} // local
         onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)} //distant
 
         recording =  {(isRecording) => this.sendMessage(this.state.connectedTo, 'distantRec', isRecording)}
@@ -805,8 +818,15 @@ testPermissions= async () => {
   // }
 
 
-  onPictureTaken(path){
-    this.setState({imgLocal:path})
+
+  onPictureTaken(info){
+    console.log('onPictureTaken',info)
+    this.setState({
+      imgLocal:info.uri,
+      imgLocalW:info.width,
+      imgLocalH:info.height,
+      imgLocalLandscape: info.deviceOrientation>2, 
+    })
   }
 
   setStorage(val){
@@ -1130,8 +1150,7 @@ const styles = StyleSheet.create({
     position:'absolute',
     top:0,
     left:0,
-    width: previewWidth, 
-    height: previewHeight, 
+
     // transform: [{ rotate: '90deg'}],
     resizeMode: 'contain', //enum('cover', 'contain', 'stretch', 'repeat', 'center')
     backgroundColor: 'transparent',

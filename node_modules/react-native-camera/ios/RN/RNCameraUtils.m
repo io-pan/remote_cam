@@ -26,6 +26,12 @@
     return captureDevice;
 }
 
++ (AVCaptureDevice *)deviceWithCameraId:(NSString *)cameraId
+{
+    AVCaptureDevice *device = [AVCaptureDevice deviceWithUniqueID:cameraId];
+    return device;
+}
+
 # pragma mark - Enum conversion
 
 + (AVCaptureVideoOrientation)videoOrientationForInterfaceOrientation:(UIInterfaceOrientation)orientation
@@ -94,7 +100,7 @@
     }
 }
 
-+ (UIImage *)convertBufferToUIImage:(CMSampleBufferRef)sampleBuffer previewSize:(CGSize)previewSize
++ (UIImage *)convertBufferToUIImage:(CMSampleBufferRef)sampleBuffer previewSize:(CGSize)previewSize position:(NSInteger)position
 {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     CIImage *ciImage = [CIImage imageWithCVPixelBuffer:imageBuffer];
@@ -104,25 +110,32 @@
         orientation = [[UIApplication sharedApplication] statusBarOrientation];
     });
     UIInterfaceOrientation curOrientation = orientation;
-
+    NSInteger orientationToApply = 1;
+    BOOL isBackCamera = position == 1;
     if (curOrientation == UIInterfaceOrientationLandscapeLeft){
-        ciImage = [ciImage imageByApplyingOrientation:3];
+        orientationToApply = isBackCamera ? kCGImagePropertyOrientationDown : kCGImagePropertyOrientationUpMirrored;
     } else if (curOrientation == UIInterfaceOrientationLandscapeRight){
-        ciImage = [ciImage imageByApplyingOrientation:1];
+        orientationToApply = isBackCamera ? kCGImagePropertyOrientationUp  : kCGImagePropertyOrientationDownMirrored;
     } else if (curOrientation == UIInterfaceOrientationPortrait){
-        ciImage = [ciImage imageByApplyingOrientation:6];
+        orientationToApply = isBackCamera ? kCGImagePropertyOrientationRight : kCGImagePropertyOrientationLeftMirrored;
     } else if (curOrientation == UIInterfaceOrientationPortraitUpsideDown){
-        ciImage = [ciImage imageByApplyingOrientation:8];
+        orientationToApply = isBackCamera ? kCGImagePropertyOrientationLeft : kCGImagePropertyOrientationRightMirrored;
     }
+    ciImage = [ciImage imageByApplyingOrientation:orientationToApply];
+
+    // scale down CIImage
     float bufferWidth = CVPixelBufferGetWidth(imageBuffer);
     float bufferHeight = CVPixelBufferGetHeight(imageBuffer);
-    // scale down CIImage
-    float scale = bufferHeight>bufferWidth ? 400 / bufferWidth : 400 / bufferHeight;
+    float scale = scale = bufferHeight>bufferWidth ? 720 / bufferWidth : 720 / bufferHeight;;
+    if (position == 1) {
+        scale = bufferHeight>bufferWidth ? 400 / bufferWidth : 400 / bufferHeight;
+    }
     CIFilter* scaleFilter = [CIFilter filterWithName:@"CILanczosScaleTransform"];
     [scaleFilter setValue:ciImage forKey:kCIInputImageKey];
     [scaleFilter setValue:@(scale) forKey:kCIInputScaleKey];
     [scaleFilter setValue:@(1) forKey:kCIInputAspectRatioKey];
     ciImage = scaleFilter.outputImage;
+
     // convert to UIImage and crop to preview aspect ratio
     NSDictionary *contextOptions = @{kCIContextUseSoftwareRenderer : @(false)};
     CIContext *temporaryContext = [CIContext contextWithOptions:contextOptions];
@@ -136,7 +149,7 @@
     videoImage = [temporaryContext createCGImage:ciImage fromRect:boundingRect];
     CGRect croppedSize = AVMakeRectWithAspectRatioInsideRect(previewSize, boundingRect);
     CGImageRef croppedCGImage = CGImageCreateWithImageInRect(videoImage, croppedSize);
-    UIImage *image = [[UIImage alloc] initWithCGImage:croppedCGImage];
+    UIImage *image = [[UIImage alloc] initWithCGImage:videoImage];
     CGImageRelease(videoImage);
     CGImageRelease(croppedCGImage);
     return image;

@@ -485,10 +485,10 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
   public void JPEGtoBase64(String sourcePath, Promise promise) {
  
     String base64 = "";
-    try {/*from   w w w .  ja  va  2s  .  c om*/
+    try {
         File file = new File(sourcePath);
         byte[] buffer = new byte[(int) file.length() + 100];
-        @SuppressWarnings("resource")
+        //@SuppressWarnings("resource")
         int length = new FileInputStream(file).read(buffer);
         base64 = Base64.encodeToString(buffer, 0, length,
                 Base64.DEFAULT);
@@ -507,10 +507,21 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
                
     String base64Image = encodedImg;//encodedImg.split(",")[1];
     byte[] data = Base64.decode(base64Image.getBytes(), 0);
- 
+
+
     try (OutputStream stream = new FileOutputStream(destinationPath)) {
         stream.write(data);
-        promise.resolve(destinationPath);
+
+ 
+        Bitmap bitmap = BitmapFactory.decodeFile(destinationPath);
+
+      WritableMap map = Arguments.createMap();
+
+      map.putString("path", destinationPath);
+      map.putDouble("width", bitmap.getWidth());
+      map.putDouble("height", bitmap.getHeight());
+
+        promise.resolve(map);
 
     } catch (Exception e) {
       Log.e("base64toJPEG", e.getMessage());
