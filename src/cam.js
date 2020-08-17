@@ -403,8 +403,8 @@ export default class Cam extends Component<Props> {
               
               // Send photo to distant device.
               if(this.pictureRequested){
-               this.pictureRequested = false;
-               this.props.onRequestedPictureTaken(picture.base64);
+                this.props.onRequestedPictureTaken(this.pictureRequested, picture.base64);
+                this.pictureRequested = false;
               }
 
               // Send photo back to form.
@@ -494,12 +494,14 @@ console.log(data)
 
             if(this.videoRequested){
 
-              this.videoRequested = false;
+
               NativeModules.RNioPan.JPEGtoBase64(result.path.replace('file://',''))
               .then((base64) => {
-                this.props.onRequestedPictureTaken(base64);
+                this.props.onRequestedPictureTaken(this.videoRequested, base64);
+                this.videoRequested = false;
               })
               .catch((err) => { 
+                this.videoRequested = false;
                 alert('ERROR JPEGtoBase64');
               });
              
