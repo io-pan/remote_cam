@@ -50,37 +50,31 @@ export default class App extends Component<Props> {
   constructor(props) {
     super(props);
     this.state = {
-      battery:{charging:false, level:0},
-      cam:  false,
-      mask: false,
-      storages: [],
-      storage: false,
 
       devices: [
-        {
+        { // [0] is local device.
           user:{id:'local', name:'local', connected:true},
           distantBattery:{charging:false, level:0},
           distantStorages:false,
           distantStorage:false,
+          distantCam:false,
+          previewing:false,
+          previewDimensions:false,
         }
       ],
-      // connectedTo:false,
+      
+      connectedTo:false,
 
       imgLocal: false,
-
-      distantCam:false,
 
 
       distantRec:false,
       distantTakingPhoto:false,
       distantSnaping:false,
-      distantBattery:false,
-      previewing:false,
-        distantPreview0:false,
-        distantPreview1:false,
-        distantPreviewCurrent:0,
 
-      previewDimensions:false,
+
+
+
 
 
       modalStorage:false,
@@ -151,14 +145,9 @@ export default class App extends Component<Props> {
     NativeModules.RNioPan.getBatteryInfo()
     .then((battery) => {
       // console.log(battery); // {level: 94, charging: true}
-      let device = this.getDevice('local');
-      device.distantBattery = battery;
-
-      devices = this.state.devices;
-      devices[this.getDeviceIndex('local')] = device;
-
+      let devices = this.state.devices;
+      devices[0].distantBattery = battery;
       this.setState({
-        battery: battery,
         devices: devices,
       }, function(){
         this.sendMessage(this.state.connectedTo, 'distantBattery', battery);
@@ -380,8 +369,6 @@ testPermissions= async () => {
 
     console.log('Connected',user)
 
-
-
     // Update list of devices.
     let devices = this.state.devices;
     devices[this.getDeviceIndex(user.id)].user = user;
@@ -448,18 +435,10 @@ testPermissions= async () => {
       BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), id);
     }
 
+    let devices = this.state.devices;
     if( key=='cmd'){
-      if(value=='cam' && this.state.distantCam) {
-        
-        this.setState({
-          distantCam:false,
-          distantRec:false,
-          distantTakingPhoto:false,
-          distantSnaping:false,
-          previewing:false,
-        });
-
-        let devices = this.state.devices;
+      if(value=='distantCam' && this.state.distantCam) {
+                
         devices[this.getDeviceIndex(id)] = {
           ...this.getDevice(id),
           distantCam:false,
@@ -505,12 +484,11 @@ testPermissions= async () => {
   }
 
   receivedMessage = (user) => {
-    // alert(JSON.stringify(user , undefined, 2));
-
     let msg = user.message;
     msg = JSON.parse(msg);
 
-    console.log('receivedMessage',msg);
+    const devices = this.state.devices;
+    // console.log('receivedMessage',msg);
 
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
@@ -518,21 +496,18 @@ testPermissions= async () => {
 
     else if( msg.key == 'distantCam' || msg.key == 'distantRec' || msg.key == 'distantMask'
        || msg.key == 'distantBattery' || msg.key == 'distantStorages'
-    ) { // for button.
+    ) { 
+      // for button.
+      devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
+      this.setState({devices:devices});
+    }
 
-      
-      this.setState({[msg.key]:msg.value});
-
-
-      let devices = this.state.devices;
-      devices[this.getDeviceIndex(user.id)] = {
-        ...this.getDevice(user.id),
-        [msg.key]:msg.value,
-      };
-
-      this.setState({
-        devices:devices,
-      });
+    else if(msg.key == 'previewDimensions') {
+      devices[this.getDeviceIndex(user.id)].previewDimensions = {
+            w: msg.value.split('x')[0] / this.previewScale,
+            h: msg.value.split('x')[1] / this.previewScale,
+          };
+      this.setState({devices:devices});
     }
 
     else if( msg.key == 'setStorage' ) { 
@@ -552,39 +527,12 @@ testPermissions= async () => {
       });
     }
 
-
-    else if(msg.key == 'camDimensions') {
-      this.setState({previewDimensions:{
-        w: msg.value.split('x')[0] / this.previewScale,
-        h: msg.value.split('x')[1] / this.previewScale,
-      }});
-
-      this.setState({devices:{
-        ...this.state.devices,
-        [user.id]:{
-          ...this.state.devices[user.id],
-          previewDimensions:{
-            w: msg.value.split('x')[0] / this.previewScale,
-            h: msg.value.split('x')[1] / this.previewScale,
-          }
-        }
-      }});
-    }
-
     else if(msg.key == 'cmd') {
 
-      if(msg.value == 'cam') {
-        if(this.state.cam){
-          console.log('cam off')
-
-          this.refs.cam.stopRecordRequested = true;
-          this.refs.cam.camera.stopRecording();
-          this.setState({cam:false});  
-        }
-        else {
-          console.log('cam on')
-          this.setState({cam:true});      
-        }
+      if(msg.value == 'distantCam') {
+       
+        devices[0].distantCam = !devices[0].distantCam;
+        this.setState({devices:devices});
       } 
       
       else if(msg.value=='toggleMask'){//ioio
@@ -598,8 +546,6 @@ testPermissions= async () => {
 
       else if(msg.value=='takeSnap'){
         // this.refs.cam.refs.viewShotCam.capture().then(uri => {
-        //   this.sendMessage(this.state.connectedTo, 'snap', uri);
-        // });
         this.refs.viewShot.capture().then(uri => {
           this.sendMessage(this.state.connectedTo, 'snap', uri);
         });
@@ -607,7 +553,7 @@ testPermissions= async () => {
 
       else if(msg.value=='viewShot' && this.refs.viewShot){
         this.refs.viewShot.capture().then(uri => {
-          this.sendMessage(this.state.connectedTo, 'preview', uri);
+          this.sendMessage(this.state.connectedTo, 'viewShot', uri);
         });
       }
 
@@ -630,10 +576,10 @@ testPermissions= async () => {
 
     else if(msg.key == 'picture' || msg.key == 'snap') {
       // console.log(this.state.connectedTo)
-      console.log('--- recieve pictuer or snp or videothumb')
+      console.log('--- receive  picture or snap or videothumb')
 
       // Get the name of the device that sent the photo.
-      const deviceName = this.state.devices[user.id].name;
+      const deviceName = devices[this.getDeviceIndex(user.id)].user.name;
       
       // Store photo as JPEG in dedicated device folder.
       if(deviceName){
@@ -647,6 +593,9 @@ testPermissions= async () => {
           console.log('picure', fileName)
           this.setState({
             imgLocal: 'file://' + fileName,
+            imgLocalW:result.width,
+            imgLocalH:result.height,
+
             distantSnaping:false,
             distantTakingPhoto:false,
           })
@@ -662,26 +611,21 @@ testPermissions= async () => {
     }
 
 
-    // Preview.
-    else if(msg.key == 'preview') { 
+    // Preview image.
+    else if(msg.key == 'viewShot') { 
+      console.log('got viewshot')
+
       this.distantPreviewNumber = this.distantPreviewNumber ? 0: 1;
       if(this.distantPreviewNumber==1){
-        this.setState({distantPreview0:'data:image/png;base64,'+msg.value}, function(){
-        });
+        console.log('upd0');
+        devices[this.getDeviceIndex(user.id)].distantPreview0 = 'data:image/png;base64,'+msg.value
       }
       else {
-        this.setState({distantPreview1:'data:image/png;base64,'+msg.value}, function(){
-        });
+        console.log('upd1');
+        devices[this.getDeviceIndex(user.id)].distantPreview1 = 'data:image/png;base64,'+msg.value
       }
+      this.setState({devices:devices});
     }
-  }
-
-  togglePreview(){
-    this.setState({previewing:!this.state.previewing}, function(){
-      if(this.state.previewing){
-        this.sendMessage(this.state.connectedTo, 'cmd', 'viewShot');
-      } 
-    });
   }
 
   renderCamButton(device){
@@ -697,20 +641,20 @@ testPermissions= async () => {
                     : null
     ;
     return (
-      <View style = {{flexDirection:'row'}}>
+      <View style = {{flexDirection:'row', backgroundColor:'white'}}>
 
         <TouchableOpacity
           style={styles.button}
           onPress={  
             device.user.id == 'local'
             ? () => this.toggleCam()
-            : () => this.sendMessage(device.user.id, 'cmd', 'cam') 
+            : () => this.sendMessage(device.user.id, 'cmd', 'distantCam') 
           }
           underlayColor={colors.greenSuperLight}
         ><MaterialCommunityIcons 
             name='camera'
             size={30}
-            color={device.distantCam ? colors.greenFlash : 'white'}
+            color={device.distantCam ? colors.greenFlash : 'grey'}
             backgroundColor='transparent'
         /></TouchableOpacity>
 
@@ -726,7 +670,7 @@ testPermissions= async () => {
               ><MaterialCommunityIcons 
                    name='sleep' // MASK
                    size={20}
-                   color={ device.distantMask ? colors.greenFlash : 'white'}
+                   color={ device.distantMask ? colors.greenFlash : 'grey'}
                    backgroundColor='transparent'
               /></TouchableOpacity>
 
@@ -738,7 +682,7 @@ testPermissions= async () => {
               ><MaterialCommunityIcons 
                    name='micro-sd'  
                    size={20}
-                   color={ this.state.modalStorage ? colors.greenFlash : 'white'}
+                   color={ this.state.modalStorage ? colors.greenFlash : 'grey'}
                    backgroundColor='transparent'
               >
                 {/* TODO warn if batterie low level */}
@@ -749,10 +693,10 @@ testPermissions= async () => {
               <View style={styles.button}>
                 <MaterialCommunityIcons 
                   name='battery-40' 
-                  color={'white'}
+                  color={'grey'}
                   backgroundColor={'transparent'}
                   size={20}
-                  style={{color:'white',width:100}}
+                  style={{color:'grey',width:100}}
 
                 >
                 { titleBattery}
@@ -771,7 +715,7 @@ testPermissions= async () => {
               }}
               color={ device.previewing ? colors.greenFlash : 'grey'}
               title = 'Peview'
-              onPress = {() => this.togglePreview()}
+              onPress = {() => this.togglePreview(device.user.id)}
             />
             <Button 
               style={{ 
@@ -781,7 +725,7 @@ testPermissions= async () => {
               }}
               color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
               title = 'PHOTO'
-              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture')}
+              onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takePicture')}
 
             />
             <Button 
@@ -792,7 +736,7 @@ testPermissions= async () => {
               }}
               color={ this.state.distantSnaping ? colors.greenFlash : 'grey'}
               title = 'SNAP' // so we can have a snap while recording.
-              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takeSnap')}
+              onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takeSnap')}
 
             />
             <Button 
@@ -803,7 +747,7 @@ testPermissions= async () => {
               }}
               color= { this.state.distantRec ? '#843333' : 'grey'}
               title = 'rec'
-              onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 
+              onPress = {() => this.sendMessage(device.user.id, 'cmd', 
                                                 this.state.distantRec ? 'stopRecording':'startRecording')}
             />
 
@@ -851,71 +795,78 @@ testPermissions= async () => {
     );
   }
 
-  swichPreviewPicture(distantPreviewCurrent){
-
-    this.setState({distantPreviewCurrent:distantPreviewCurrent}, function(){
-      if(this.state.previewing){
+  switchPreviewPicture(userId, distantPreviewCurrent){
+    console.log(' ------- switch --------' )
+    const devices = this.state.devices;
+    devices[this.getDeviceIndex(userId)].distantPreviewCurrent = distantPreviewCurrent;
+    this.setState({devices: devices}, function(){
+      if(this.state.devices[this.getDeviceIndex(userId)].previewing){
         // this.intervalHandle = setTimeout(() => {
-            this.sendMessage(this.state.connectedTo, 'cmd', 'viewShot');
+          console.log('send')
+            this.sendMessage(userId, 'cmd', 'viewShot');
         // }, 5000);
       }
     });
   }
 
-  renderPreview(){
-    if (!this.state.previewing) return null;
-    if (!this.state.distantPreview0 && !this.state.distantPreview1) return null;
+  renderPreview(value){
+    console.log('renderPreview ', value);
 
+    if (!value.previewing
+    || (!value.distantPreview0 && !value.distantPreview1))
+    return null;
+console.log('renderPreview');
     return(
       <View 
         style = {[styles.distantPreviewContainer,
           
           {
-          width:this.state.previewDimensions.w,
-          height:this.state.previewDimensions.h,
+          width:value.previewDimensions.w,
+          height:value.previewDimensions.h,
           }]}
         >
-        {!this.state.distantPreview0 
+        <Text>PREVIEW</Text>
+        {!value.distantPreview0 
           ? null
           : <FastImage
               style = {[
                 styles.distantPreviewImage, 
                 {
-                  width:this.state.previewDimensions.w,
-                  height:this.state.previewDimensions.h,
+                  width:value.previewDimensions.w,
+                  height:value.previewDimensions.h,
                 },
-                this.state.distantPreviewCurrent == 0 
+                value.distantPreviewCurrent == 0 
                 ? styles.zIndex0 
                 : styles.zIndex1 
               ]}
               source={{
-                  uri: this.state.distantPreview0,
+                  uri: value.distantPreview0,
                   headers: { Authorization: 'someAuthToken' },
                   priority: FastImage.priority.high ,
               }}
               resizeMode={FastImage.resizeMode.contain}
               // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-              onLoad={e => this.swichPreviewPicture(1)}
+              onLoad={e => this.switchPreviewPicture(value.user.id, 1)}
             />
         }
-        {!this.state.distantPreview1
+        {!value.distantPreview1
           ? null
           : <FastImage
               style = {[
                 styles.distantPreviewImage, 
-                this.state.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 ,
+                value.distantPreviewCurrent == 0 ? styles.zIndex1 :styles.zIndex0 ,
                 {
-                  width:this.state.previewDimensions.w,
-                  height:this.state.previewDimensions.h,
+                  width:value.previewDimensions.w,
+                  height:value.previewDimensions.h,
                 },
               ]}
               source={{
-                  uri: this.state.distantPreview1,
+                  uri: value.distantPreview1,
                   headers: { Authorization: 'someAuthToken' },
                   priority: FastImage.priority.high ,
               }}
               resizeMode={FastImage.resizeMode.contain}
-              onLoad={e => this.swichPreviewPicture(0)}
+              onLoad={e => this.switchPreviewPicture(value.user.id, 0)}
             />
         }
 
@@ -923,26 +874,31 @@ testPermissions= async () => {
     );
   }
 
-  toggleCam(view) { // alwas 'free'
+  toggleCam() { // Local cam.
+    const devices = this.state.devices;
+    devices[0].distantCam = !devices[0].distantCam;
+    this.setState({devices:devices}, function(){
+      this.sendMessage(this.state.connectedTo, 'distantCam', devices[0].distantCam);
+    });
+  }
 
-    if( this.state.cam == view) {
-      this.setState({cam:false}, function(){
-        this.sendMessage(this.state.connectedTo, 'distantCam', false);
-      });
-    }
-    else {
-      this.setState({cam:view}, function(){
-        this.sendMessage(this.state.connectedTo, 'distantCam', true);
-      });
-    }
+  togglePreview(userId) { // Distant cam.
+    const devices = this.state.devices,
+          deviceIndex = this.getDeviceIndex(userId);
+
+    devices[deviceIndex].previewing = !devices[deviceIndex].previewing;
+    this.setState({devices:devices}, function(){
+      if (devices[deviceIndex].previewing){
+        this.sendMessage(userId, 'cmd', 'viewShot');
+      }
+    });
   }
 
   toggleMask() {
     const devices = this.state.devices;
-    devices[this.getDeviceIndex('local')].distantMask = !devices[this.getDeviceIndex('local')].distantMask;
-
+    devices[0].distantMask = !devices[0].distantMask;
     this.setState({devices:devices}, function(){
-      this.sendMessage(this.state.connectedTo, 'distantMask', this.getDevice('local').distantMask);
+      this.sendMessage(this.state.connectedTo, 'distantMask', devices[0].distantMask);
     });
   }
 
@@ -953,18 +909,15 @@ testPermissions= async () => {
       this.sendMessage(this.state.connectedTo, 'distantCam', true);
     }
 
-    // if(!this.state.cam) {
-    //   if(this.state.connectedTo && this.camRequested){
-    //     this.camRequested = false;
-    //     this.sendMessage(this.state.connectedTo, 'distantCam', false);
-    //   }
-    //   return null;     
-    // }
-
     return (
       <ViewShot
         key="renderCamera"
         ref="viewShot"
+
+        onLayout={(event) => this.sendMessage(this.state.connectedTo,
+          'previewDimensions',
+          event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
+        )}
 
         options={{
           format: "jpg", 
@@ -1027,14 +980,13 @@ testPermissions= async () => {
         { // Devices.
           this.state.devices.map((value, index) => {
           //value = this.state.devices[value];
-console.log('Devices foreach',value)
+// console.log('Devices foreach',value)
 
           // console.log('his.state.devices).map', value);
           return(
 
             <View 
               key = {value.user.id}
-
               >
   
               <Button 
@@ -1050,6 +1002,15 @@ console.log('Devices foreach',value)
          
               { this.renderCamButton(value) }
 
+              { value.user.id=='local' && value.distantCam
+                ? this.renderCam() 
+                : null
+              }
+
+              <View style={styles.containerPreview}>
+                { this.renderPreview(value) }
+              </View>
+
             </View>)
           }
 
@@ -1058,14 +1019,6 @@ console.log('Devices foreach',value)
         )} 
 
 
-        { this.state.cam == false 
-          ? null
-          : this.renderCam()
-        }
-
-        <View style={styles.containerPreview}>
-          { this.renderPreview() }
-        </View>
          <View style={styles.containerPreview}>
           { this.renderImageLocal() }
         </View>
