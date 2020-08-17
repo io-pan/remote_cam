@@ -28,18 +28,21 @@ const previewHeight = 264;
 const previewWidth = 200;
 
 const shareState = {
-      distantCam:false,
-      distantMask:false,
+    user:false,
+    distantCam:false,
+    distantMask:false,
       distantRec:false,
       distantTakingPhoto:false,
       distantSnaping:false,
-      distantBattery:false,
-      distantStorages:false,
+    distantBattery:false,
+    distantStorages:false,
+    distantStorage:false,
       previewing:false,
-        distantPreview0:false,
-        distantPreview1:false,
-        distantPreviewCurrent:0,
-        previewDimensions:false,
+    previewDimensions:false,
+    distantPreview0:false,
+    distantPreview1:false,
+    distantPreviewCurrent:0,
+        
 };
 //-----------------------------------------------------------------------------------------
 export default class App extends Component<Props> {
@@ -48,14 +51,26 @@ export default class App extends Component<Props> {
     super(props);
     this.state = {
       battery:{charging:false, level:0},
-      devices: [],
-      connectedTo:false,
+      cam:  false,
+      mask: false,
+      storages: [],
+      storage: false,
+
+      devices: [
+        {
+          user:{id:'local', name:'local', connected:true},
+          distantBattery:{charging:false, level:0},
+          distantStorages:false,
+          distantStorage:false,
+        }
+      ],
+      // connectedTo:false,
 
       imgLocal: false,
-      imgLocalLandscape: false,
 
       distantCam:false,
-      distantMask:false,
+
+
       distantRec:false,
       distantTakingPhoto:false,
       distantSnaping:false,
@@ -67,20 +82,34 @@ export default class App extends Component<Props> {
 
       previewDimensions:false,
 
-      cam:  'collection-form',
-      mask: false,
-      storages: [],
-      storage: false,
 
       modalStorage:false,
     };
 
-    this.camRequested = false;
     this.stopRecordRequested = false;
 
     this.distantPreviewNumber = 0;
 
     this.previewScale=3;
+    this.isMaster = null;
+  }
+
+  getDeviceIndex(userId){
+    let rv = false;
+    this.state.devices.forEach(function(item, index){
+      if(item.user.id==userId){
+        rv = index;
+      }
+    });
+    return rv;
+  }
+  getDevice(userId){
+    if (false === this.getDeviceIndex(userId)){
+      return false;
+    }
+    else {
+      return this.state.devices[this.getDeviceIndex(userId)];
+    }
   }
 
   // TODO: re-think permissions.
@@ -122,8 +151,17 @@ export default class App extends Component<Props> {
     NativeModules.RNioPan.getBatteryInfo()
     .then((battery) => {
       // console.log(battery); // {level: 94, charging: true}
-      this.setState({battery:battery}, function(){
-        this.sendMessage(this.state.connectedTo, 'battery', battery);
+      let device = this.getDevice('local');
+      device.distantBattery = battery;
+
+      devices = this.state.devices;
+      devices[this.getDeviceIndex('local')] = device;
+
+      this.setState({
+        battery: battery,
+        devices: devices,
+      }, function(){
+        this.sendMessage(this.state.connectedTo, 'distantBattery', battery);
       });
 
       setTimeout(() => { this.testBattery() }, 60000);
@@ -160,6 +198,7 @@ export default class App extends Component<Props> {
         // XXXHDPI: Portrait: 1280px1920px
 
 
+    this.getAvailableStorages(true);
     this.testBattery();
     // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
 
@@ -170,14 +209,10 @@ export default class App extends Component<Props> {
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-
-    this.getAvailableStorages(true);
   }
 
 
 testPermissions= async () => {
-
-
 
     try{
       const granted = await PermissionsAndroid.requestMultiple([
@@ -221,7 +256,7 @@ testPermissions= async () => {
     NativeModules.RNioPan.getStorages()
     .then((dirs) => {
       if(dirs.length) {
-        console.log('getAvailableStorages', dirs);
+        // console.log('getAvailableStorages', dirs);
 
         let updatedState;
         if(setDefault){
@@ -233,16 +268,32 @@ testPermissions= async () => {
               maxSpaceId = index;
             }
           });
-          updatedState = { storages : dirs, storage:dirs[maxSpaceId].path };
+           
+
+          let devices = this.state.devices
+          devices[this.getDeviceIndex('local')].distantStorages = dirs;
+          devices[this.getDeviceIndex('local')].distantStorage = maxSpaceId;
+
+          updatedState = { storages : dirs, storage:maxSpaceId,
+                devices:devices
+                };
         }
         else {
-          updatedState = { storages : dirs, storage: false };
+          let devices = this.state.devices
+          devices[this.getDeviceIndex('local')].distantStorages = dirs;
+
+          updatedState = { storages : dirs ,
+                devices:devices
+          };
         }
 
         this.setState(updatedState, function(){
 
+
+
           // Create folders if not exists
-          this.state.storages.map((value) => {
+          // To do v2
+          this.getDevice('local').distantStorages.map((value) => {
 
             RNFetchBlob.fs.isDir(value.path +'/local')
             .then((isDir) => {
@@ -285,10 +336,9 @@ testPermissions= async () => {
     this.listener3.remove()
     this.listener4.remove()
     this.listener5.remove()
-
-    let devices = this.state.devices;
-    devices.forEach(function(item, index){
-      if (item.connected){
+    const devices  = this.state.devices;
+    this.state.devices.forEach(function(item, index){
+      if (item.connected && item.user.id != 'local'){
         BluetoothCP.disconnectFromPeer(item.id);
       }
     });
@@ -301,75 +351,84 @@ testPermissions= async () => {
   //--------------------------------------------------------
 
   PeerDetected = (user) => {
-    // Alert.alert(JSON.stringify({'PeerDetected':user}, undefined, 2));
+    // console.log(user)
+    //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
     let devices = this.state.devices;
-    devices.push(user);
+    // TODO chek if not already present in list
+    devices.push({
+      ...shareState,
+      user:user});
     this.setState({devices:devices});
   }
 
   PeerLost = (user) => {
     // Alert.alert(JSON.stringify({'PeerLost':user}, undefined, 2));
     let devices = this.state.devices;
-    let i = false;
-    devices.forEach(function(item, index){
-      if (item.id == user.id){
-        i = index;
-        return;
-      }
-    });
-    if (i!==false){
-      devices.splice(i, 1);
+
+    const i = this.getDeviceIndex(user.id);
+    if(i!==false){
+      devices.splice(this.getDeviceIndex(user.id), 1);
+      this.setState({devices:devices})
     }
-    this.setState({devices:devices})
-    BluetoothCP.advertise("WIFI-BT");
+    if(!this.isMaster) {
+      BluetoothCP.advertise("WIFI-BT");
+    }
   }
 
   Connected = (user) => {
-    // Alert.alert(JSON.stringify({'Connected':user}, undefined, 2));
+    //{ "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
     console.log('Connected',user)
 
-    this.sendMessage(user.id, 'battery', this.state.battery);
-    this.sendMessage(user.id, 'storages', this.state.storages);
 
+
+    // Update list of devices.
     let devices = this.state.devices;
-    devices.forEach((item, index)=>{
-      if (item.id == user.id){
-        devices[index] = user;
-        this.setState({devices:devices, connectedTo:user.id})
-        
-        // Create folder for that device on each avalable storage.
-        this.state.storages.map((value) => {
+    devices[this.getDeviceIndex(user.id)].user = user;
+    this.setState({
+      devices:devices,
+      connectedTo:user.id, // TODO multiple ids
+    }, function(){
 
-          RNFetchBlob.fs.isDir(value.path + '/' + user.name.replace(/ /g, "-"))
-          .then((isDir) => {
-            if(!isDir){
-
-              RNFetchBlob.fs.mkdir(value.path + '/' + user.name.replace(/ /g, "-"))
-              .then(() => { 
-                // OK .
-              })
-              .catch((err) => { 
-                Alert.alert(
-                  'Erreur',
-                  'Le dossier de stockage des photos pour l\'appareil distant n\'a pu être créé.\n'
-                  + value.path + '/' + user.name.replace(/ /g, "-")
-                  //+ err
-                );
-              })
-            }
-          })
-
-        });
-        BluetoothCP.stopAdvertising();
-        return;
+      if(!this.isMaster){
+        this.sendMessage(
+          user.id, 
+          'fullShareSate', 
+          this.getDevice('local'),
+        );
       }
     });
 
+    // Create folder for that device on each avalable storage.
+    this.getDevice('local').distantStorages.map((value) => {
+
+      RNFetchBlob.fs.isDir(value.path + '/' + user.name.replace(/ /g, "-"))
+      .then((isDir) => {
+        if(!isDir){
+
+          RNFetchBlob.fs.mkdir(value.path + '/' + user.name.replace(/ /g, "-"))
+          .then(() => { 
+            // OK .
+          })
+          .catch((err) => { 
+            Alert.alert(
+              'Erreur',
+              'Le dossier de stockage des photos pour l\'appareil distant n\'a pu être créé.\n'
+              + value.path + '/' + user.name.replace(/ /g, "-")
+              //+ err
+            );
+          })
+        }
+      })
+
+    });
+    BluetoothCP.stopAdvertising();
+    return;
   }
 
   connectToDevice(id){
     BluetoothCP.inviteUser(id);
+    this.isMaster = true;
   }
 
   gotInvitation = (user) => {
@@ -377,6 +436,7 @@ testPermissions= async () => {
     // alert(JSON.stringify(user , undefined, 2));
     // if(this.safeIds.indexOf(user.id) >= 0) {
       BluetoothCP.acceptInvitation(user.id);
+      this.isMaster = false;
     // }
   }
 
@@ -398,12 +458,47 @@ testPermissions= async () => {
           distantSnaping:false,
           previewing:false,
         });
+
+        let devices = this.state.devices;
+        devices[this.getDeviceIndex(id)] = {
+          ...this.getDevice(id),
+          distantCam:false,
+          distantRec:false,
+          distantTakingPhoto:false,
+          distantSnaping:false,
+          previewing:false,
+        }
+
+        this.setState({
+          devices:devices,
+        });
+
       }
       else if(value=='takeSnap') {
         this.setState({distantSnaping:true});
+
+        let devices = this.state.devices;
+        devices[this.getDeviceIndex(id)] = {
+          ...this.getDevice(id),
+          distantSnaping:false,
+        }
+        this.setState({
+          devices:devices,
+        });
+
       }
       else if(value=='takePicture') {
         this.setState({distantTakingPhoto:true});
+
+        let devices = this.state.devices;
+        devices[this.getDeviceIndex(id)] = {
+          ...this.getDevice(id),
+          distantTakingPhoto:false,
+        }
+        this.setState({
+          devices:devices,
+        });
+
       }
 
     }
@@ -415,52 +510,84 @@ testPermissions= async () => {
     let msg = user.message;
     msg = JSON.parse(msg);
 
-    //console.log('receivedMessage',msg);
+    console.log('receivedMessage',msg);
 
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
     }
-    else if(msg.key == 'distantCam') { // for button.
-      this.setState({distantCam:msg.value});
+
+    else if( msg.key == 'distantCam' || msg.key == 'distantRec' || msg.key == 'distantMask'
+       || msg.key == 'distantBattery' || msg.key == 'distantStorages'
+    ) { // for button.
+
+      
+      this.setState({[msg.key]:msg.value});
+
+
+      let devices = this.state.devices;
+      devices[this.getDeviceIndex(user.id)] = {
+        ...this.getDevice(user.id),
+        [msg.key]:msg.value,
+      };
+
+      this.setState({
+        devices:devices,
+      });
     }
-    else if(msg.key == 'distantRec') { // for button.
-      this.setState({distantRec:msg.value});
+
+    else if( msg.key == 'setStorage' ) { 
+      this.setStorage('local', msg.value);
     }
-    else if(msg.key == 'distantMask') { // for button.
-      this.setState({distantMask:msg.value});
+
+    else if( msg.key == 'fullShareSate' ) { 
+
+      msg.value.user = this.getDevice(user.id).user; // avoid storring message.
+      devices[this.getDeviceIndex(user.id)] = msg.value
+
+      this.setState({
+        devices: devices,
+      }, function(){
+
+        console.log('upd   ',this.state.devices)
+      });
     }
-    else if(msg.key == 'battery') {
-      this.setState({distantBattery:msg.value});
-    }
-    else if(msg.key == 'storages') {
-      this.setState({distantStorages:msg.value});
-    }
+
+
     else if(msg.key == 'camDimensions') {
       this.setState({previewDimensions:{
         w: msg.value.split('x')[0] / this.previewScale,
         h: msg.value.split('x')[1] / this.previewScale,
+      }});
+
+      this.setState({devices:{
+        ...this.state.devices,
+        [user.id]:{
+          ...this.state.devices[user.id],
+          previewDimensions:{
+            w: msg.value.split('x')[0] / this.previewScale,
+            h: msg.value.split('x')[1] / this.previewScale,
+          }
+        }
       }});
     }
 
     else if(msg.key == 'cmd') {
 
       if(msg.value == 'cam') {
-        if(this.state.cam=='free'){
+        if(this.state.cam){
           console.log('cam off')
-          this.camRequested = false;
 
           this.refs.cam.stopRecordRequested = true;
           this.refs.cam.camera.stopRecording();
-          this.setState({cam:'collection-form'});  
+          this.setState({cam:false});  
         }
         else {
           console.log('cam on')
-          this.camRequested = true;
-          this.setState({cam:'free'});      
+          this.setState({cam:true});      
         }
       } 
       
-      else if(msg.value=='toggleMask'){
+      else if(msg.value=='toggleMask'){//ioio
         this.toggleMask()
       }
 
@@ -506,16 +633,11 @@ testPermissions= async () => {
       console.log('--- recieve pictuer or snp or videothumb')
 
       // Get the name of the device that sent the photo.
-      let deviceName = false;
-      this.state.devices.forEach((item, index)=>{
-        if (item.id == this.state.connectedTo){
-          deviceName = item.name.replace(/ /g, "-");
-        }
-      });
+      const deviceName = this.state.devices[user.id].name;
       
       // Store photo as JPEG in dedicated device folder.
       if(deviceName){
-        const fileName = this.state.storage+ '/'+ deviceName + '/'  +date2folderName() + '.jpg';
+        const fileName = this.getDevice('local').distantStorages[this.getDevice('local').distantStorage].path + '/'+ deviceName + '/'  +date2folderName() + '.jpg';
         NativeModules.RNioPan.base64toJPEG(
           msg.value, 
           fileName
@@ -562,35 +684,83 @@ testPermissions= async () => {
     });
   }
 
-  renderCamButton(value){
-   
-    if(!value.connected) return null;
+  renderCamButton(device){
 
+    if(!device.user.connected) return null;
+
+    const titleBattery = (device.distantBattery && device.distantBattery.level)
+                    ? device.distantBattery.level + '%'
+                    : null
+                  
+    ,     titleStorage = (device.distantStorages && device.distantStorages[device.distantStorage] && device.distantStorages[device.distantStorage].free)
+                    ? formatBytes(device.distantStorages[device.distantStorage].free)
+                    : null
+    ;
     return (
-      <View>
+      <View style = {{flexDirection:'row'}}>
+
         <TouchableOpacity
           style={styles.button}
-          onPress={  () => this.sendMessage(value.id, 'cmd', 'cam') }
+          onPress={  
+            device.user.id == 'local'
+            ? () => this.toggleCam()
+            : () => this.sendMessage(device.user.id, 'cmd', 'cam') 
+          }
           underlayColor={colors.greenSuperLight}
         ><MaterialCommunityIcons 
             name='camera'
             size={30}
-            color={this.state.distantCam ? '#338433' : 'white'}
+            color={device.distantCam ? colors.greenFlash : 'white'}
             backgroundColor='transparent'
         /></TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={  () => this.sendMessage(value.id, 'cmd', 'toggleMask') }
-          underlayColor={colors.greenSuperLight}
-        ><MaterialCommunityIcons 
-            name='power-sleep'
-            size={30}
-            color={this.state.distantMask ? '#338433' : 'white'}
-            backgroundColor='transparent'
-        /></TouchableOpacity>
 
-        { !this.state.distantCam
+              <TouchableOpacity
+                style={styles.button}
+                onPress = {
+                  device.user.id == 'local'
+                  ? () => this.toggleMask()
+                  : () => this.sendMessage(device.user.id, 'cmd', 'toggleMask')
+                }
+                underlayColor={colors.greenSuperLight}
+              ><MaterialCommunityIcons 
+                   name='sleep' // MASK
+                   size={20}
+                   color={ device.distantMask ? colors.greenFlash : 'white'}
+                   backgroundColor='transparent'
+              /></TouchableOpacity>
+
+
+              <TouchableOpacity
+                style={styles.button}
+                onPress = {() => this.showStorages(device.user.id)}
+                underlayColor={colors.greenSuperLight}
+              ><MaterialCommunityIcons 
+                   name='micro-sd'  
+                   size={20}
+                   color={ this.state.modalStorage ? colors.greenFlash : 'white'}
+                   backgroundColor='transparent'
+              >
+                {/* TODO warn if batterie low level */}
+                { titleStorage}
+              </MaterialCommunityIcons>
+              </TouchableOpacity>
+
+              <View style={styles.button}>
+                <MaterialCommunityIcons 
+                  name='battery-40' 
+                  color={'white'}
+                  backgroundColor={'transparent'}
+                  size={20}
+                  style={{color:'white',width:100}}
+
+                >
+                { titleBattery}
+                </MaterialCommunityIcons>
+              </View>
+
+
+        { !device.distantCam
           ? null
           : <View>
             <Button 
@@ -599,7 +769,7 @@ testPermissions= async () => {
                 height:40 ,
                 marginBottom:2,
               }}
-              color={ this.state.previewing ? '#338433' : 'grey'}
+              color={ device.previewing ? colors.greenFlash : 'grey'}
               title = 'Peview'
               onPress = {() => this.togglePreview()}
             />
@@ -609,7 +779,7 @@ testPermissions= async () => {
                 height:40 ,
                 marginBottom:2,
               }}
-              color={ this.state.distantTakingPhoto ? '#338433' : 'grey'}
+              color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
               title = 'PHOTO'
               onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takePicture')}
 
@@ -620,7 +790,7 @@ testPermissions= async () => {
                 height:40 ,
                 marginBottom:2,
               }}
-              color={ this.state.distantSnaping ? '#338433' : 'grey'}
+              color={ this.state.distantSnaping ? colors.greenFlash : 'grey'}
               title = 'SNAP' // so we can have a snap while recording.
               onPress = {() => this.sendMessage(this.state.connectedTo, 'cmd', 'takeSnap')}
 
@@ -753,9 +923,10 @@ testPermissions= async () => {
     );
   }
 
-  toggleView(view) { // alwas 'free'
+  toggleCam(view) { // alwas 'free'
+
     if( this.state.cam == view) {
-      this.setState({cam:'collection-form'}, function(){
+      this.setState({cam:false}, function(){
         this.sendMessage(this.state.connectedTo, 'distantCam', false);
       });
     }
@@ -767,19 +938,18 @@ testPermissions= async () => {
   }
 
   toggleMask() {
-    this.setState({mask:!this.state.mask}, function(){
-      this.sendMessage(this.state.connectedTo, 'distantMask', this.state.mask);
+    const devices = this.state.devices;
+    devices[this.getDeviceIndex('local')].distantMask = !devices[this.getDeviceIndex('local')].distantMask;
+
+    this.setState({devices:devices}, function(){
+      this.sendMessage(this.state.connectedTo, 'distantMask', this.getDevice('local').distantMask);
     });
   }
 
 
   renderCam(){
-    // console.log('-----renderCam');
-    // console.log('connectedTo',this.state.connectedTo);
-    // console.log('camRequested',this.camRequested);
 
-    if(this.state.connectedTo && this.camRequested){
-      this.camRequested = false;
+    if(this.state.connectedTo){
       this.sendMessage(this.state.connectedTo, 'distantCam', true);
     }
 
@@ -796,10 +966,6 @@ testPermissions= async () => {
         key="renderCamera"
         ref="viewShot"
 
-        onLayout={(event) => this.sendMessage(this.state.connectedTo,
-          'camDimensions',
-          event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
-        )}
         options={{
           format: "jpg", 
           quality:0.5,
@@ -809,7 +975,7 @@ testPermissions= async () => {
       <Cam ref="cam"
         mode='free'
         //mode_={1}
-        path = {this.state.storage+'/local'}
+        path = {this.getDevice('local').distantStorages[ this.getDevice('local').distantStorage ].path+'/local'}
         onPictureTaken = {(info) => this.onPictureTaken(info)} // local
         onRequestedPictureTaken = {(base64) => this.sendMessage(this.state.connectedTo, 'picture', base64)} //distant
 
@@ -819,31 +985,33 @@ testPermissions= async () => {
     );
   }
 
-  // camDimensions(event) {
-  //   this.sendMessage(
-  //     'camDimensions',
-  //     event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
-  //   );
-    // this.setState({camDimensions:{
-    //   w:event.nativeEvent.layout.width,
-    //   h:event.nativeEvent.layout.height,
-    // }});
-  // }
-
-
-
   onPictureTaken(info){
     console.log('onPictureTaken',info)
     this.setState({
       imgLocal:info.uri,
       imgLocalW:info.width,
       imgLocalH:info.height,
-      imgLocalLandscape: info.deviceOrientation>2, 
     })
   }
 
-  setStorage(val){
-    this.setState({storage:val.path, modalStorage:false});
+  setStorage(userId, index){
+    const devices = this.state.devices;
+    devices[this.getDeviceIndex(userId)].distantStorage = index;
+
+    this.setState({devices:devices, modalStorage:false}, function(){
+
+      if(userId != 'local') {
+        this.sendMessage(this.state.connectedTo, 'setStorage', index);
+      }
+      else{
+        // feedback
+        this.sendMessage(
+          this.state.connectedTo, 
+          'fullShareSate', 
+          this.getDevice(userId)
+        );
+      }
+    });
   }
 
   render() {
@@ -851,121 +1019,49 @@ testPermissions= async () => {
     return (
       <View style={styles.container}>
 
-        <View style={styles.header}>
-          <ScrollView horizontal={true}>
-
-            {/*
-            <TouchableOpacity
-              style={styles.button}
-              onPress = {() => this.testPermissions()}
-              underlayColor={colors.greenSuperLight}
-            ><MaterialCommunityIcons 
-                 name='power-sleep' // MASK
-                 size={30}
-                 color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
-                 backgroundColor='transparent'
-            /></TouchableOpacity>
-            */}
-
-            <TouchableOpacity
-              style={styles.button}
-              onPress = {() => this.toggleMask()}
-              underlayColor={colors.greenSuperLight}
-            ><MaterialCommunityIcons 
-                 name='power-sleep' // MASK
-                 size={30}
-                 color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
-                 backgroundColor='transparent'
-            /></TouchableOpacity>
-
-
-            <TouchableOpacity
-              style={styles.button}
-              onPress = {() => this.showStorages()}
-              underlayColor={colors.greenSuperLight}
-            ><MaterialCommunityIcons 
-                 name='micro-sd'  
-                 size={30}
-                 color={ this.state.modalStorage ? colors.greenFlash : 'grey'}
-                 backgroundColor='transparent'
-            />
-            {/* TODO warn if batterie low level */}
-            </TouchableOpacity>
-
-            {/*
-            <View style={{ flexDirection:'row', flex:1}}>
-              { this.state.storages.map((value, index) =>
-                <TouchableOpacity 
-                  key={index}
-                  style={{padding:5,
-                    flexDirection:'row', flex:0.5, justifyContent:'center', alignItems:'center',
-                  }}
-                  onPress = {() => this.setStorage(value)} 
-                  >
-                  <MaterialCommunityIcons
-                    name={ value.removable ? "micro-sd" : "cellphone-android" }
-                    style={{
-                      backgroundColor:'transparent',
-                      // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
-                      color:this.state.storage==value.path ? colors.greenFlash :'grey',
-                    }}
-                    size={25}
-                  />
-                  <Text style={{fontSize:16,
-                    color:this.state.storage==value.path ? colors.greenFlash :'grey',
-                    }}>
-                  {formatBytes(value.free)}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            */}
-            <TouchableOpacity
-              style={styles.button}
-              onPress = {() => this.toggleView('free')}
-              underlayColor={colors.greenSuperLight}
-            ><MaterialCommunityIcons 
-                 name='camera'
-                 size={30}
-                 color={ this.state.cam=='free' ? colors.greenFlash : 'grey'}
-                 backgroundColor='transparent'
-            /></TouchableOpacity>
- 
-
-          </ScrollView>
-        </View> 
 
       <ScrollView style={{backgroundColor:'grey', paddingBottom:200}}>
 
-        { this.state.cam == 'collection-form' || this.state.cam =='login'
+
+
+        { // Devices.
+          this.state.devices.map((value, index) => {
+          //value = this.state.devices[value];
+console.log('Devices foreach',value)
+
+          // console.log('his.state.devices).map', value);
+          return(
+
+            <View 
+              key = {value.user.id}
+
+              >
+  
+              <Button 
+                style={{ 
+                  margin:1, 
+                  height:40,
+                  marginBottom:2,
+                }}
+                title = {value.user.name}
+                color = {value.user.connected ? colors.greenFlash : 'grey'}
+                onPress = { value.user.id!='local' ? () => this.connectToDevice(value.user.id):null}
+              />
+         
+              { this.renderCamButton(value) }
+
+            </View>)
+          }
+
+
+        // map devices
+        )} 
+
+
+        { this.state.cam == false 
           ? null
           : this.renderCam()
         }
-
-
-        { // Distant devices.
-          this.state.devices.map((value, index) => 
-          <View 
-            key = {index}
-            style = {{flexDirection:'row'}}
-            >
-            <Button 
-              style={{ 
-                margin:1, 
-                height:40,
-                marginBottom:2,
-              }}
-              title = {(this.state.distantBattery && this.state.distantBattery.level)
-                        ? value.name + ' ' + this.state.distantBattery.level + '%'
-                        : value.name
-                      }
-              color = {value.connected ? '#338433' : 'grey'}
-              onPress = {() => this.connectToDevice(value.id)}
-            />
-            { this.renderCamButton(value) }
-          </View>
-        )}
-
-
 
         <View style={styles.containerPreview}>
           { this.renderPreview() }
@@ -976,8 +1072,10 @@ testPermissions= async () => {
       </ScrollView>
 
 
+      {this.renderModalStorage()}
 
-      {this.state.mask 
+
+      {this.getDevice('local').distantMask 
       ? <TouchableOpacity ref="black_mask_to_save_battery"
            activeOpacity={1}
            style={{
@@ -1017,16 +1115,41 @@ testPermissions= async () => {
       }
 
 
+
+
+      </View>
+    );
+  }
+
+  _t(str){
+    return str;
+  }
+
+  renderModalStorage(){
+    if(this.state.modalStorage===false) return null;
+    
+    console.log('modalStorage',  this.state.modalStorage) ;
+    console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorage))
+    console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorage)].distantStorages)
+    
+
+    const curPath = this.getDevice(this.state.modalStorage).distantStorages[
+      this.getDevice(this.state.modalStorage).distantStorage
+    ].path;
+
+
+    return(
         <Modal
           style={{marginTop:20}}
           animationType="slide"
           transparent={false}
-          visible={this.state.modalStorage}
+          visible={this.state.modalStorage!==false}
           onRequestClose={() => this.showStorages(false)}
         >
             <View style={{ flex:1}}></View>
             <View style={{ flex:1}}>
-              { this.state.storages.map((value, index) =>
+              { this.state.devices[this.getDeviceIndex(this.state.modalStorage)].distantStorages.map((value, index) =>
+
                 <TouchableOpacity 
                   key={index}
                   style={{
@@ -1036,24 +1159,23 @@ testPermissions= async () => {
                     justifyContent:'center', 
                     alignItems:'center',
                   }}
-                  onPress = {() => this.setStorage(value)} 
+                  onPress = {() => this.setStorage(this.state.modalStorage, index)} 
                   >
                   <MaterialCommunityIcons
                     name={ value.removable ?  "micro-sd" : "cellphone-android" }
                     style={{flexDirection:'column',
                       backgroundColor:'transparent',
-                      // color:this.state.storage.path==value.path ? colors.greenFlash :'grey',
-                      color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                      color: curPath == value.path ? colors.greenFlash :'grey',
                     }}
                     size={50}
                   >
                     <View>
                       <Text style={{fontSize:14,
-                        color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                        color: curPath == value.path ? colors.greenFlash :'grey',
                         }}>{formatBytes(value.total)}</Text>
 
                       <Text style={{fontSize:16,
-                        color:this.state.storage==value.path ? colors.greenFlash :'grey',
+                        color: curPath == value.path ? colors.greenFlash :'grey',
                         }}>
                       {formatBytes(value.free)} {this._t('libres')}</Text>
                     </View>
@@ -1066,25 +1188,12 @@ testPermissions= async () => {
         </Modal>
 
   
-
-
-      </View>
     );
   }
 
-  _t(str){
-    return str;
-  }
 
-  showStorages(visible) {
-    console.log('visible',visible)   
-    console.log('this.state.modalStorage',this.state.modalStorage);
-    if(visible === undefined || visible === null) {
-      visible = !this.state.modalStorage
-    }
-    console.log('visible',visible)   
-    console.log('this.state.modalStorage',this.state.modalStorage);
-    this.setState({modalStorage:visible});
+  showStorages(userId) {
+    this.setState({modalStorage:userId});
   }
 }
 
@@ -1143,7 +1252,7 @@ const styles = StyleSheet.create({
   },
 
   button:{
-    margin:1, 
+    margin:5, 
     height:40 ,
     marginBottom:2,
     backgroundColor:'transparent',  

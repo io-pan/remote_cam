@@ -190,7 +190,6 @@ export default class Cam extends Component<Props> {
     this.previewHeight = Dimensions.get('window').width*4/3;
     
 
-    this.camRequested = false;
     this.stopRecordRequested = false;
     // TODO: http protocole.
     // TODO: trusted devices.

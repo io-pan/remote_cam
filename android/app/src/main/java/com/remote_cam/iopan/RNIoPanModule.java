@@ -155,7 +155,6 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     successCallback.invoke(rv);
   }
 
-
   @ReactMethod
   public void getStorages(final Promise promise) {
     try {
