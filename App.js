@@ -11,6 +11,7 @@ import {Platform, StyleSheet, Text, View, Image,
   Modal,
 } from 'react-native';
 
+import Slider from '@react-native-community/slider';
 import SplashScreen from "rn-splash-screen";
 import KeepScreenOn from 'react-native-keep-screen-on';
 import RNFetchBlob from 'rn-fetch-blob';
@@ -39,6 +40,7 @@ const shareState = {
     distantStorage:false,
       previewing:false,
     previewDimensions:false,
+    distantPreviewQuality:0.8,
     distantPreview0:false,
     distantPreview1:false,
     distantPreviewCurrent:0,
@@ -60,6 +62,7 @@ export default class App extends Component<Props> {
           distantCam:false,
           previewing:false,
           previewDimensions:false,
+          distantPreviewQuality:0.8,
         }
       ],
       
@@ -495,7 +498,7 @@ testPermissions= async () => {
     }
 
     else if( msg.key == 'distantCam' || msg.key == 'distantRec' || msg.key == 'distantMask'
-       || msg.key == 'distantBattery' || msg.key == 'distantStorages'
+       || msg.key == 'distantBattery' || msg.key == 'distantStorages' || msg.key == 'distantPreviewQuality'
     ) { 
       // for button.
       devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
@@ -512,6 +515,13 @@ testPermissions= async () => {
 
     else if( msg.key == 'setStorage' ) { 
       this.setStorage('local', msg.value);
+    }
+
+    else if( msg.key == 'setPreviewQuality' ) { 
+      devices[0].distantPreviewQuality = msg.value;
+      this.setState({ devices: devices }, function(){
+        this.sendMessage(user.id, 'distantPreviewQuality',  msg.value);
+      });
     }
 
     else if( msg.key == 'fullShareSate' ) { 
@@ -547,13 +557,13 @@ testPermissions= async () => {
       else if(msg.value=='takeSnap'){
         // this.refs.cam.refs.viewShotCam.capture().then(uri => {
         this.refs.viewShot.capture().then(uri => {
-          this.sendMessage(this.state.connectedTo, 'snap', uri);
+          this.sendMessage(user.id, 'snap', uri);
         });
       }
 
       else if(msg.value=='viewShot' && this.refs.viewShot){
         this.refs.viewShot.capture().then(uri => {
-          this.sendMessage(this.state.connectedTo, 'viewShot', uri);
+          this.sendMessage(user.id, 'viewShot', uri);
         });
       }
 
@@ -575,8 +585,7 @@ testPermissions= async () => {
 
 
     else if(msg.key == 'picture' || msg.key == 'snap') {
-      // console.log(this.state.connectedTo)
-      console.log('--- receive  picture or snap or videothumb')
+      // console.log('--- receive  picture or snap or videothumb')
 
       // Get the name of the device that sent the photo.
       const deviceName = devices[this.getDeviceIndex(user.id)].user.name;
@@ -614,6 +623,8 @@ testPermissions= async () => {
     // Preview image.
     else if(msg.key == 'viewShot') { 
       console.log('got viewshot')
+
+
 
       this.distantPreviewNumber = this.distantPreviewNumber ? 0: 1;
       if(this.distantPreviewNumber==1){
@@ -810,22 +821,31 @@ testPermissions= async () => {
   }
 
   renderPreview(value){
-    console.log('renderPreview ', value);
+    // console.log('renderPreview ', value);
 
     if (!value.previewing
     || (!value.distantPreview0 && !value.distantPreview1))
     return null;
-console.log('renderPreview');
+
     return(
       <View 
-        style = {[styles.distantPreviewContainer,
-          
-          {
-          width:value.previewDimensions.w,
-          height:value.previewDimensions.h,
-          }]}
+        style = {[styles.distantPreviewContainer]}
         >
-        <Text>PREVIEW</Text>
+          <Slider  
+            ref="sampleSize"
+            style={styles.slider} 
+            thumbTintColor = '#ffffff' 
+            minimumTrackTintColor='#dddddd' 
+            maximumTrackTintColor='#ffffff' 
+            minimumValue={0}
+            maximumValue={1}
+            step={0.1}
+            value={value.distantPreviewQuality}
+            onValueChange={(quality) => this.sendMessage(value.user.id, 'setPreviewQuality', quality)}
+          />
+      <View 
+        style = {[styles.distantPreviewContainer]}
+        >
         {!value.distantPreview0 
           ? null
           : <FastImage
@@ -871,6 +891,7 @@ console.log('renderPreview');
         }
 
       </View>
+      </View>
     );
   }
 
@@ -902,7 +923,6 @@ console.log('renderPreview');
     });
   }
 
-
   renderCam(){
 
     if(this.state.connectedTo){
@@ -921,7 +941,7 @@ console.log('renderPreview');
 
         options={{
           format: "jpg", 
-          quality:0.5,
+          quality: this.state.devices[0].distantPreviewQuality,
           result:"base64",
         }}
       >
@@ -1024,9 +1044,7 @@ console.log('renderPreview');
         </View>
       </ScrollView>
 
-
       {this.renderModalStorage()}
-
 
       {this.getDevice('local').distantMask 
       ? <TouchableOpacity ref="black_mask_to_save_battery"
