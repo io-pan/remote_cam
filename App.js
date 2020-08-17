@@ -59,6 +59,7 @@ export default class App extends Component<Props> {
           distantBattery:{charging:false, level:0},
           distantStorages:false,
           distantStorage:false,
+          distantMask:false,
           distantCam:false,
           previewing:false,
           previewDimensions:false,
@@ -66,14 +67,17 @@ export default class App extends Component<Props> {
           distantPreview0:false,
           distantPreview1:false,
           distantPreviewCurrent:0,
+
+          distantRec:false,
+          distantTakingPhoto:false,
+          distantSnaping:false,
         }
       ],
 
       imgLocal: false,
 
-      distantRec:false,
-      distantTakingPhoto:false,
-      distantSnaping:false,
+
+
 
       modalStorage:false,
     };
@@ -463,30 +467,12 @@ testPermissions= async () => {
 
       }
       else if(value=='takeSnap') {
-        this.setState({distantSnaping:true});
-
-        let devices = this.state.devices;
-        devices[this.getDeviceIndex(userId)] = {
-          ...this.getDevice(userId),
-          distantSnaping:false,
-        }
-        this.setState({
-          devices:devices,
-        });
-
+        devices[this.getDeviceIndex(userId)].distantSnaping = true;
+        this.setState({devices:devices});
       }
       else if(value=='takePicture') {
-        this.setState({distantTakingPhoto:true});
-
-        let devices = this.state.devices;
-        devices[this.getDeviceIndex(userId)] = {
-          ...this.getDevice(userId),
-          distantTakingPhoto:false,
-        }
-        this.setState({
-          devices:devices,
-        });
-
+        devices[this.getDeviceIndex(userId)].distantTakingPhoto = true;
+        this.setState({devices:devices});
       }
 
     }
@@ -508,7 +494,7 @@ testPermissions= async () => {
     ) { 
       // for button.
       devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
-      this.setState({devices:devices});
+      //this.setState({devices:devices});
     }
 
     else if(msg.key == 'previewDimensions') {
@@ -596,6 +582,14 @@ testPermissions= async () => {
       // Get the name of the device that sent the photo.
       const deviceName = devices[this.getDeviceIndex(user.id)].user.name;
       
+      if(msg.key == 'picture'){
+        devices[this.getDeviceIndex(user.id)].distantTakingPhoto = false;
+      }
+      else {
+        devices[this.getDeviceIndex(user.id)].distantSnaping = false;
+      }
+      
+      
       // Store photo as JPEG in dedicated device folder.
       if(deviceName){
         const fileName = this.getDevice('local').distantStorages[this.getDevice('local').distantStorage].path + '/'+ deviceName + '/'  +date2folderName() + '.jpg';
@@ -611,8 +605,7 @@ testPermissions= async () => {
             imgLocalW:result.width,
             imgLocalH:result.height,
 
-            distantSnaping:false,
-            distantTakingPhoto:false,
+            devices:devices,
           })
         }).catch((err) => { 
           Alert.alert(
@@ -723,16 +716,35 @@ testPermissions= async () => {
         { !device.distantCam
           ? null
           : <View>
-            <Button 
-              style={{ 
-                margin:1, 
-                height:40 ,
-                marginBottom:2,
-              }}
-              color={ device.previewing ? colors.greenFlash : 'grey'}
-              title = 'Peview'
-              onPress = {() => this.togglePreview(device.user.id)}
-            />
+            
+            { device.user.id  == 'local'
+            ? null
+            : <TouchableOpacity
+                style={styles.button}
+                onPress = {() => this.togglePreview(device.user.id)}
+                underlayColor={colors.greenSuperLight}
+              ><MaterialCommunityIcons 
+                   name='eye-outline'  
+                   size={20}
+                   color={ device.previewing ? colors.greenFlash : 'grey'}
+                   backgroundColor='transparent'
+              />
+              </TouchableOpacity>
+
+              /*
+              <Button 
+                style={{ 
+                  margin:1, 
+                  height:40 ,
+                  marginBottom:2,
+                }}
+                color={ device.previewing ? colors.greenFlash : 'grey'}
+                title = 'Peview'
+                onPress = {() => this.togglePreview(device.user.id)}
+              />
+            */
+            }
+
             <Button 
               style={{ 
                 margin:1, 
@@ -741,32 +753,42 @@ testPermissions= async () => {
               }}
               color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
               title = 'PHOTO'
-              onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takePicture')}
-
+              onPress = {
+                device.user.id == 'local'
+                ? () => {} // TODO
+                : () => this.sendMessage(device.user.id, 'cmd', 'takePicture')
+              }
             />
-            <Button 
-              style={{ 
-                margin:1, 
-                height:40 ,
-                marginBottom:2,
-              }}
-              color={ this.state.distantSnaping ? colors.greenFlash : 'grey'}
-              title = 'SNAP' // so we can have a snap while recording.
-              onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takeSnap')}
 
-            />
+            { device.user.id  == 'local'
+            ? null
+            : <Button 
+                style={{ 
+                  margin:1, 
+                  height:40 ,
+                  marginBottom:2,
+                }}
+                color={ device.distantSnaping ? colors.greenFlash : 'grey'}
+                title = 'SNAP' // so we can have a snap while recording.
+                onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takeSnap')}
+              />
+            }
+
             <Button 
               style={{ 
                 margin:1, 
                 height:40,
                 marginBottom:2,
               }}
-              color= { this.state.distantRec ? '#843333' : 'grey'}
+              color= { device.distantRec ? '#843333' : 'grey'}
               title = 'rec'
-              onPress = {() => this.sendMessage(device.user.id, 'cmd', 
-                                                this.state.distantRec ? 'stopRecording':'startRecording')}
+              onPress = {
+                device.user.id == 'local'
+                ? () => {} // TODO
+                : () => this.sendMessage(device.user.id, 'cmd', 
+                          device.distantRec ? 'stopRecording':'startRecording')
+              }
             />
-
 
 
             {/*     
@@ -811,32 +833,8 @@ testPermissions= async () => {
     );
   }
 
-  switchPreviewPicture(userId){
-    console.log(' ------- switch --------' )
-this.sendMessage(userId, 'cmd', 'viewShot');
-    // const devices = this.state.devices;
-    // devices[this.getDeviceIndex(userId)].distantPreviewCurrent 
-    // = devices[this.getDeviceIndex(userId)].distantPreviewCurrent == 1
-    // ? 0 : 1;
-
-    // this.setState({devices: devices}, function(){
-    //   if(this.state.devices[this.getDeviceIndex(userId)].previewing){
-    //     // this.intervalHandle = setTimeout(() => {
-    //       console.log('send')
-    //         this.sendMessage(userId, 'cmd', 'viewShot');
-    //     // }, 5000);
-    //   }
-    // });
-  }
-
   renderPreview(value){
     // console.log('renderPreview ', value);
-
- console.log('renderPreview ');
- console.log(value.previewDimensions);
-
-
-
     if (!value.previewing
     || (!value.distantPreview0 && !value.distantPreview1))
     return null;
@@ -845,69 +843,68 @@ this.sendMessage(userId, 'cmd', 'viewShot');
       <View 
         style = {[styles.distantPreviewContainer]}
         >
-          <Slider  
-            ref="sampleSize"
-            style={styles.slider} 
-            thumbTintColor = '#ffffff' 
-            minimumTrackTintColor='#dddddd' 
-            maximumTrackTintColor='#ffffff' 
-            minimumValue={0}
-            maximumValue={1}
-            step={0.1}
-            value={value.distantPreviewQuality}
-            onValueChange={(quality) => this.sendMessage(value.user.id, 'setPreviewQuality', quality)}
-          />
-      <View 
-        style = {[styles.distantPreviewContainer]}
-        >
-        <Text>d</Text>
-        {!value.distantPreview0 
-          ? <Text>!value.distantPreview0</Text>
-          : <FastImage
-              style = {[
-                styles.distantPreviewImage, 
-                {
-                  width:value.previewDimensions.w,
-                  height:value.previewDimensions.h,
-                },
-                value.distantPreviewCurrent == 0 
-                ? styles.zIndex0 
-                : styles.zIndex1,
-              ]}
-              source={{
-                  uri: value.distantPreview0,
-                  headers: { Authorization: 'someAuthToken' },
-                  priority: FastImage.priority.high ,
-              }}
-              resizeMode={FastImage.resizeMode.contain}
-              // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-              onLoad={e => this.switchPreviewPicture(value.user.id, 1)}
-            />
-        }
-        {!value.distantPreview1
-          ? <Text>value.distantPreview1</Text>
-          : <FastImage
-              style = {[
-                styles.distantPreviewImage, 
-                value.distantPreviewCurrent == 0 
-                ? styles.zIndex1 
-                : styles.zIndex0,
-                {
-                  width:value.previewDimensions.w,
-                  height:value.previewDimensions.h,
-                },
-              ]}
-              source={{
-                  uri: value.distantPreview1,
-                  headers: { Authorization: 'someAuthToken' },
-                  priority: FastImage.priority.high ,
-              }}
-              resizeMode={FastImage.resizeMode.contain}
-              onLoad={e => this.switchPreviewPicture(value.user.id, 0)}
-            />
-        }
+        <Slider  
+          ref="sampleSize"
+          style={styles.slider} 
+          thumbTintColor = '#ffffff' 
+          minimumTrackTintColor='#dddddd' 
+          maximumTrackTintColor='#ffffff' 
+          minimumValue={0}
+          maximumValue={1}
+          step={0.1}
+          value={value.distantPreviewQuality}
+          onValueChange={(quality) => this.sendMessage(value.user.id, 'setPreviewQuality', quality)}
+        />
+        <View 
+          style = {[styles.distantPreviewContainer]}
+          >
+          {!value.distantPreview0 
+            ? null
+            : <FastImage
+                style = {[
+                  styles.distantPreviewImage, 
+                  {
+                    width:value.previewDimensions.w,
+                    height:value.previewDimensions.h,
+                  },
+                  value.distantPreviewCurrent == 0 
+                  ? styles.zIndex0 
+                  : styles.zIndex1,
+                ]}
+                source={{
+                    uri: value.distantPreview0,
+                    headers: { Authorization: 'someAuthToken' },
+                    priority: FastImage.priority.high ,
+                }}
+                resizeMode={FastImage.resizeMode.contain}
+                // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
+                onLoad={e => this.sendMessage(value.user.id, 'cmd', 'viewShot')}
+              />
+          }
+          {!value.distantPreview1
+            ? null
+            : <FastImage
+                style = {[
+                  styles.distantPreviewImage, 
+                  value.distantPreviewCurrent == 0 
+                  ? styles.zIndex1 
+                  : styles.zIndex0,
+                  {
+                    width:value.previewDimensions.w,
+                    height:value.previewDimensions.h,
+                  },
+                ]}
+                source={{
+                    uri: value.distantPreview1,
+                    headers: { Authorization: 'someAuthToken' },
+                    priority: FastImage.priority.high ,
+                }}
+                resizeMode={FastImage.resizeMode.contain}
+                onLoad={e => this.sendMessage(value.user.id, 'cmd', 'viewShot')}
+              />
+          }
 
-      </View>
+        </View>
       </View>
     );
   }

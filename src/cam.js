@@ -484,7 +484,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
 
           const data = await promise;
           //console.log('video promise',data)
-console.log(data)
+
           // Store video thumb.
           NativeModules.RNioPan.getVideoThumb(filename)
           .then((result) => {
@@ -493,7 +493,6 @@ console.log(data)
             // height
 
             if(this.videoRequested){
-
 
               NativeModules.RNioPan.JPEGtoBase64(result.path.replace('file://',''))
               .then((base64) => {
@@ -1381,7 +1380,7 @@ console.log(data)
         }
 
         {this.renderMotion()}
-   {this.renderFaces()}
+        {/*this.renderFaces()*/}
        </RNCamera>
     
       </ViewShot>
