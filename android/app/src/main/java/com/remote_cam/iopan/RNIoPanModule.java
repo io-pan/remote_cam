@@ -58,13 +58,6 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     super(reactContext);
     mContext = reactContext;
   }
-
-
-  // private boolean firstRun = true;
-  // private Bitmap bitmapG = null;
-  // private WritableNativeArray pixelG = new WritableNativeArray();
-  // private int[][] previousRed;
-
   
   @Override
   public String getName() {
@@ -135,25 +128,32 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     }
   }
 
-  @ReactMethod
-  public void getBatteryStatus(Callback successCallback) {
-    Intent batteryIntent = getCurrentActivity().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-    int level = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-    int scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        // @ReactMethod
+        // public void getBatteryStatus(Callback successCallback) {
+        //   Intent batteryIntent = getCurrentActivity().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        //   int level = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        //   int scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
 
-    if(level == -1 || scale == -1) {
-        level = 0;
-    }
+        //   if(level == -1 || scale == -1) {
+        //       level = 0;
+        //   }
 
-    int status = batteryIntent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-    boolean isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING;
-    
-    WritableNativeMap rv = new WritableNativeMap();
-    rv.putBoolean("charging", isCharging);
-    rv.putInt("level", level);
+        //   int status = batteryIntent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        //   boolean isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING;
+          
+        //   WritableNativeMap rv = new WritableNativeMap();
+        //   rv.putBoolean("charging", isCharging);
+        //   rv.putInt("level", level);
 
-    successCallback.invoke(rv);
-  }
+        //   successCallback.invoke(rv);
+        // }
+
+        // JS side:
+        // getBatteryLevel = (callback) => {
+        //   NativeModules.RNioPan.getBatteryStatus(callback);
+        // }
+        // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
+
 
   @ReactMethod
   public void getStorages(final Promise promise) {

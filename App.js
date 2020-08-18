@@ -40,7 +40,7 @@ const shareState = {
     distantStorage:false,
       previewing:false,
     previewDimensions:false,
-    distantPreviewQuality:0.8,
+    distantPreviewQuality:0.5,
     distantPreview0:false,
     distantPreview1:false,
     distantPreviewCurrent:0,
@@ -63,7 +63,7 @@ export default class App extends Component<Props> {
           distantCam:false,
           previewing:false,
           previewDimensions:false,
-          distantPreviewQuality:0.8,
+          distantPreviewQuality:0.5,
           distantPreview0:false,
           distantPreview1:false,
           distantPreviewCurrent:0,
@@ -75,11 +75,11 @@ export default class App extends Component<Props> {
       ],
 
       imgLocal: false,
-
-
-
+      imgLocalW:0,
+      imgLocalH:0,
 
       modalStorage:false,
+      modalDevices:false,
     };
 
     this.stopRecordRequested = false;
@@ -140,25 +140,6 @@ export default class App extends Component<Props> {
   }
 
 
-  testBattery(){
-    NativeModules.RNioPan.getBatteryInfo()
-    .then((battery) => {
-      // console.log(battery); // {level: 94, charging: true}
-      let devices = this.state.devices;
-      devices[0].distantBattery = battery;
-      this.setState({
-        devices: devices,
-      }, function(){
-        this.sendMessage('all', 'distantBattery', battery);
-      });
-
-      setTimeout(() => { this.testBattery() }, 60000);
-    })
-  }
-  // getBatteryLevel = (callback) => {
-  //   NativeModules.RNioPan.getBatteryStatus(callback);
-  // }
-
   componentDidMount() {
     StatusBar.setHidden(true);
     SplashScreen.hide();
@@ -187,8 +168,8 @@ export default class App extends Component<Props> {
 
 
     this.getAvailableStorages(true);
-    this.testBattery();
-    // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
+    this.getBatteryInfo();
+    
 
     BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
     BluetoothCP.browse('WIFI-BT');
@@ -197,125 +178,6 @@ export default class App extends Component<Props> {
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-  }
-
-
-testPermissions= async () => {
-
-    try{
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
-      ])
-      if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
-      &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
-      // &&  granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-      // &&  granted['android.permission.ACCESS_COARSE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-      // &&  granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
-      // &&  granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
-      ){
-         Alert.alert('PERMiSSION OK');
-      }
-      else {
-         Alert.alert('NO EPRMiSSION');
-        // Exit app.
-      }
-    } catch (err) {
-      Alert.alert(err);
-      console.warn(err)
-    }
-  
-}
-
-
-  getAvailableStorages(setDefault){
-    // console.log(RNFetchBlob.fs.dirs.CacheDir)
-    // console.log(RNFetchBlob.fs.dirs.DCIMDir)
-
-    NativeModules.RNioPan.getStorages()
-    .then((dirs) => {
-      if(dirs.length) {
-        // console.log('getAvailableStorages', dirs);
-
-        let updatedState;
-        if(setDefault){
-          let maxSpace = 0;
-          let maxSpaceId = 0;
-          dirs.forEach(function(item, index){
-            if (item.free > maxSpace){
-              maxSpace = item.free;
-              maxSpaceId = index;
-            }
-          });
-           
-
-          let devices = this.state.devices
-          devices[this.getDeviceIndex('local')].distantStorages = dirs;
-          devices[this.getDeviceIndex('local')].distantStorage = maxSpaceId;
-
-          updatedState = { storages : dirs, storage:maxSpaceId,
-                devices:devices
-                };
-        }
-        else {
-          let devices = this.state.devices
-          devices[this.getDeviceIndex('local')].distantStorages = dirs;
-
-          updatedState = { storages : dirs ,
-                devices:devices
-          };
-        }
-
-        this.setState(updatedState, function(){
-
-
-
-          // Create folders if not exists
-          // To do v2
-          this.getDevice('local').distantStorages.map((value) => {
-
-            RNFetchBlob.fs.isDir(value.path +'/local')
-            .then((isDir) => {
-              if(!isDir){
-
-                RNFetchBlob.fs.mkdir(value.path +'/local')
-                .then(() => { 
-                  // OK // video thumb dir created on the fly.
-                })
-                .catch((err) => { 
-                  Alert.alert(
-                    'Erreur',
-                    'Le dossier de stockage des photos pour l\'appareil local n\'a pu être créé.\n'
-                    + value.path +'/local'
-                    //+ err
-                  );
-                })
-              }
-            })
-
-          });
-        });
-      }
-
-
-
-    })
-    .catch((err) => { 
-      console.log('getStorages ERROR', err) 
-    })
-  }
-
-  componentDidUpdate(){
-
   }
 
   componentWillUnmount() {
@@ -334,6 +196,114 @@ testPermissions= async () => {
     BluetoothCP.stopAdvertising();
   }
 
+// testPermissions= async () => {
+
+//     try{
+//       const granted = await PermissionsAndroid.requestMultiple([
+//         PermissionsAndroid.PERMISSIONS.CAMERA,
+//         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+//         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+//         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+//         PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+//         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+//         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+//         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+
+//         PermissionsAndroid.PERMISSIONS.BLUETOOTH,
+//         PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+//       ])
+//       if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+//       &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+//       // &&  granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+//       // &&  granted['android.permission.ACCESS_COARSE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+//       // &&  granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
+//       // &&  granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
+//       ){
+//          Alert.alert('PERMiSSION OK');
+//       }
+//       else {
+//          Alert.alert('NO EPRMiSSION');
+//         // Exit app.
+//       }
+//     } catch (err) {
+//       Alert.alert(err);
+//       console.warn(err)
+//     }
+// }
+
+
+  getBatteryInfo(){
+    NativeModules.RNioPan.getBatteryInfo()
+    .then((battery) => {
+      // console.log(battery); // {level: 94, charging: true}
+      let devices = this.state.devices;
+      devices[0].distantBattery = battery;
+      this.setState({
+        devices: devices,
+      }, function(){
+        this.sendMessage('all', 'distantBattery', battery);
+      });
+
+      setTimeout(() => { this.getBatteryInfo() }, 60000);
+    })
+  }
+
+  getAvailableStorages(setDefault){
+    NativeModules.RNioPan.getStorages()
+    .then((dirs) => {
+      if(dirs.length) {
+        // console.log('getAvailableStorages', dirs);
+        const devices = this.state.devices;
+        devices[0].distantStorages = dirs;
+        
+        if(setDefault){
+          let maxSpace = 0;
+          let maxSpaceId = 0;
+          dirs.forEach(function(item, index){
+            if (item.free > maxSpace){
+              maxSpace = item.free;
+              maxSpaceId = index;
+            }
+          });
+          devices[0].distantStorage = maxSpaceId;
+        }
+
+        this.setState({devices:devices}, function(){
+          // Create folders if not exists
+          devices[0].distantStorages.map((value) => {
+
+            RNFetchBlob.fs.isDir(value.path +'/local')
+            .then((isDir) => {
+              if(!isDir){
+                RNFetchBlob.fs.mkdir(value.path +'/local')
+                .then(() => { 
+                  // OK // video thumb dir created on the fly.
+                })
+                .catch((err) => { 
+                  Alert.alert(
+                    'Erreur',
+                    'Le dossier de stockage des photos pour l\'appareil local n\'a pu être créé.\n'
+                    + value.path +'/local'
+                    //+ err
+                  );
+                });
+              }
+            }); // isDir
+
+          });
+        });
+      }
+    }) // RNioPan.getStorages
+    .catch((err) => { 
+      console.log('getStorages ERROR', err) 
+    })
+  }
+
+  componentDidUpdate(){
+
+  }
+
+
   //--------------------------------------------------------
   //            P2P communication
   //--------------------------------------------------------
@@ -350,38 +320,57 @@ testPermissions= async () => {
   }
 
   PeerLost = (user) => {
-    // Alert.alert(JSON.stringify({'PeerLost':user}, undefined, 2));
-    let devices = this.state.devices;
+    // console.log(user)
 
-    const i = this.getDeviceIndex(user.id);
-    if(i!==false){
-      devices.splice(this.getDeviceIndex(user.id), 1);
-      this.setState({devices:devices})
-    }
+    // Check if it is only a logout or a real lost.
+    BluetoothCP.getNearbyPeers((users)=>{
+      let stillNearby = false;
+      users.forEach(function(value,index){
+        if(value.id == user.id){
+          stillNearby = true;
+        }
+      })
+
+      const i = this.getDeviceIndex(user.id),
+            devices = this.state.devices;
+      if(i!==false){
+        if(stillNearby){
+          devices[i].user = user; // disconnected.
+        }
+        else{
+          devices.splice(i, 1); /// lost.
+        }
+        this.setState({devices:devices})
+      }
+    });
+
     if(!this.isMaster) {
       BluetoothCP.advertise("WIFI-BT");
     }
   }
 
-  Connected = (user) => {
-    //{ "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
+  getNearbyPeers(){
+    BluetoothCP.getNearbyPeers(function(devices){
+      console.log(devices)
+    });
+  }
 
-    console.log('Connected',user)
+  Connected = (user) => {
+    // console.log('Connected',user)
+    // { "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
     // Update list of devices.
-    let devices = this.state.devices;
+    const devices = this.state.devices;
     devices[this.getDeviceIndex(user.id)].user = user;
-    this.setState({
-      devices:devices,
-    }, function(){
 
+    this.setState({ devices:devices }, function(){
       if(!this.isMaster){
-        this.sendMessage(
-          user.id, 
-          'fullShareSate', 
-          this.getDevice('local'),
-        );
+        this.toggleCam();
       }
+      //else{
+        // Tell others about me.
+        this.sendMessage( user.id, 'fullShareSate', devices[0]);
+      //}
     });
 
     // Create folder for that device on each avalable storage.
@@ -411,7 +400,7 @@ testPermissions= async () => {
     return;
   }
 
-  connectToDevice(id){
+  connectTo(id){
     BluetoothCP.inviteUser(id);
     this.isMaster = true;
   }
@@ -443,6 +432,7 @@ testPermissions= async () => {
       userId = [userId]
     }
 
+    // Send message to distant device.
     userId.forEach(function(uid, index){
       BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), uid);
     });
@@ -450,23 +440,24 @@ testPermissions= async () => {
   
     let devices = this.state.devices;
     if( key=='cmd'){
-      if(value=='distantCam' && this.state.distantCam) {
+      // if(value=='distantCam' && this.state.distantCam) {
                 
-        devices[this.getDeviceIndex(userId)] = {
-          ...this.getDevice(userId),
-          distantCam:false,
-          distantRec:false,
-          distantTakingPhoto:false,
-          distantSnaping:false,
-          previewing:false,
-        }
+      //   devices[this.getDeviceIndex(userId)] = {
+      //     ...this.getDevice(userId),
+      //     distantCam:false,
+      //     distantRec:false,
+      //     distantTakingPhoto:false,
+      //     distantSnaping:false,
+      //     previewing:false,
+      //   }
 
-        this.setState({
-          devices:devices,
-        });
+      //   this.setState({ devices:devices });
 
-      }
-      else if(value=='takeSnap') {
+      // }
+
+      // else 
+
+      if(value=='takeSnap') {
         devices[this.getDeviceIndex(userId)].distantSnaping = true;
         this.setState({devices:devices});
       }
@@ -479,66 +470,27 @@ testPermissions= async () => {
   }
 
   receivedMessage = (user) => {
-    let msg = user.message;
-    msg = JSON.parse(msg);
-
-    const devices = this.state.devices;
     // console.log('receivedMessage',msg);
+    if(this.getDeviceIndex(user.id) === false) {
+      return false;
+    }
+
+    const devices = this.state.devices,
+          msg = JSON.parse(user.message);
 
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
     }
 
-    else if( msg.key == 'distantCam' || msg.key == 'distantRec' || msg.key == 'distantMask'
-       || msg.key == 'distantBattery' || msg.key == 'distantStorages' || msg.key == 'distantPreviewQuality'
-    ) { 
-      // for button.
-      devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
-      //this.setState({devices:devices});
-    }
-
-    else if(msg.key == 'previewDimensions') {
-      devices[this.getDeviceIndex(user.id)].previewDimensions = {
-            w: msg.value.split('x')[0] / this.previewScale,
-            h: msg.value.split('x')[1] / this.previewScale,
-          };
-      this.setState({devices:devices});
-    }
-
-    else if( msg.key == 'setStorage' ) { 
-      this.setStorage('local', msg.value);
-    }
-
-    else if( msg.key == 'setPreviewQuality' ) { 
-      devices[0].distantPreviewQuality = msg.value;
-      this.setState({ devices: devices }, function(){
-        this.sendMessage(user.id, 'distantPreviewQuality',  msg.value);
-      });
-    }
-
-    else if( msg.key == 'fullShareSate' ) { 
-
-      msg.value.user = this.getDevice(user.id).user; // avoid storring message.
-      devices[this.getDeviceIndex(user.id)] = msg.value
-
-      this.setState({
-        devices: devices,
-      }, function(){
-
-        console.log('upd   ',this.state.devices)
-      });
-    }
-
+    // Received order.
     else if(msg.key == 'cmd') {
 
       if(msg.value == 'distantCam') {
-       
-        devices[0].distantCam = !devices[0].distantCam;
-        this.setState({devices:devices});
+        this.toggleCam();
       } 
       
       else if(msg.value=='toggleMask'){//ioio
-        this.toggleMask()
+        this.toggleMask();
       }
 
       else if(msg.value=='takePicture'){
@@ -569,12 +521,62 @@ testPermissions= async () => {
         this.refs.cam.camera.stopRecording();
       }
 
-      else{
-        console.log('receivedMessage ELSE', msg.value)
-        this.setState({[msg.value]:!this.state[msg.value]});
-      }
+      // else{
+      //   console.log('receivedMessage ELSE', msg.value)
+      //   this.setState({[msg.value]:!this.state[msg.value]});
+      // }
     }
 
+    //
+    // Received data.
+    //
+
+    else if( msg.key == 'distantCam'  || msg.key == 'distantRec' 
+         ||  msg.key == 'distantMask' || msg.key == 'distantBattery') { 
+
+
+      if( msg.key == 'distantCam'){
+        devices[this.getDeviceIndex(user.id)].previewing = true;
+      }
+      devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
+      this.setState({devices:devices}, function(){
+        if( msg.key == 'distantCam'){
+          this.sendMessage(user.id, 'cmd', 'viewShot');
+        }
+      });
+    }
+
+    else if(msg.key == 'previewDimensions') {
+      devices[this.getDeviceIndex(user.id)].previewDimensions = {
+            w: msg.value.split('x')[0] / this.previewScale,
+            h: msg.value.split('x')[1] / this.previewScale,
+          };
+      this.setState({devices:devices});
+    }
+
+    else if( msg.key == 'setStorage' ) { 
+      this.setStorage('local', msg.value);
+    }
+
+    else if( msg.key == 'setPreviewQuality' ) { 
+      devices[0].distantPreviewQuality = msg.value;
+      this.setState({ devices: devices }, function(){
+        this.sendMessage(user.id, 'distantPreviewQuality',  msg.value);
+      });
+    }
+
+    else if( msg.key == 'fullShareSate' ) { 
+
+      msg.value.user = this.getDevice(user.id).user; // avoid storring message.
+      devices[this.getDeviceIndex(user.id)] = msg.value
+
+      this.setState({
+        devices: devices,
+      }, function(){
+
+        // console.log('upd   ',this.state.devices)
+      });
+    }
 
     else if(msg.key == 'picture' || msg.key == 'snap') {
       // console.log('--- receive  picture or snap or videothumb')
@@ -597,9 +599,9 @@ testPermissions= async () => {
           msg.value, 
           fileName
         ).then((result) => {
-         console.log('base64toJPEG', result)
+          // console.log('base64toJPEG', result)
           // Output photo
-          console.log('picure', fileName)
+          // console.log('picure', fileName)
           this.setState({
             imgLocal: 'file://' + fileName,
             imgLocalW:result.width,
@@ -621,15 +623,11 @@ testPermissions= async () => {
 
     // Preview image.
     else if(msg.key == 'viewShot') { 
-      console.log('got viewshot')
-
       if(devices[this.getDeviceIndex(user.id)].distantPreviewCurrent==0){
-        console.log('upd0');
         devices[this.getDeviceIndex(user.id)].distantPreview0 = 'data:image/png;base64,'+msg.value;
         devices[this.getDeviceIndex(user.id)].distantPreviewCurrent = 1; 
       }
       else {
-        console.log('upd1');
         devices[this.getDeviceIndex(user.id)].distantPreview1 = 'data:image/png;base64,'+msg.value
         devices[this.getDeviceIndex(user.id)].distantPreviewCurrent = 0; 
       }
@@ -668,49 +666,49 @@ testPermissions= async () => {
         /></TouchableOpacity>
 
 
-              <TouchableOpacity
-                style={styles.button}
-                onPress = {
-                  device.user.id == 'local'
-                  ? () => this.toggleMask()
-                  : () => this.sendMessage(device.user.id, 'cmd', 'toggleMask')
-                }
-                underlayColor={colors.greenSuperLight}
-              ><MaterialCommunityIcons 
-                   name='sleep' // MASK
-                   size={20}
-                   color={ device.distantMask ? colors.greenFlash : 'grey'}
-                   backgroundColor='transparent'
-              /></TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress = {
+            device.user.id == 'local'
+            ? () => this.toggleMask()
+            : () => this.sendMessage(device.user.id, 'cmd', 'toggleMask')
+          }
+          underlayColor={colors.greenSuperLight}
+        ><MaterialCommunityIcons 
+             name='sleep' // MASK
+             size={20}
+             color={ device.distantMask ? colors.greenFlash : 'grey'}
+             backgroundColor='transparent'
+        /></TouchableOpacity>
 
 
-              <TouchableOpacity
-                style={styles.button}
-                onPress = {() => this.showStorages(device.user.id)}
-                underlayColor={colors.greenSuperLight}
-              ><MaterialCommunityIcons 
-                   name='micro-sd'  
-                   size={20}
-                   color={ this.state.modalStorage ? colors.greenFlash : 'grey'}
-                   backgroundColor='transparent'
-              >
-                {/* TODO warn if batterie low level */}
-                { titleStorage}
-              </MaterialCommunityIcons>
-              </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress = {() => this.showStorages(device.user.id)}
+          underlayColor={colors.greenSuperLight}
+        ><MaterialCommunityIcons 
+             name='micro-sd'  
+             size={20}
+             color={ this.state.modalStorage ? colors.greenFlash : 'grey'}
+             backgroundColor='transparent'
+        >
+          {/* TODO warn if batterie low level */}
+          { titleStorage}
+        </MaterialCommunityIcons>
+        </TouchableOpacity>
 
-              <View style={styles.button}>
-                <MaterialCommunityIcons 
-                  name='battery-40' 
-                  color={'grey'}
-                  backgroundColor={'transparent'}
-                  size={20}
-                  style={{color:'grey',width:100}}
+        <View style={styles.button}>
+          <MaterialCommunityIcons 
+            name='battery-40' 
+            color={'grey'}
+            backgroundColor={'transparent'}
+            size={20}
+            style={{color:'grey',width:100}}
 
-                >
-                { titleBattery}
-                </MaterialCommunityIcons>
-              </View>
+          >
+          { titleBattery}
+          </MaterialCommunityIcons>
+        </View>
 
 
         { !device.distantCam
@@ -721,8 +719,8 @@ testPermissions= async () => {
             ? null
             : <TouchableOpacity
                 style={styles.button}
-                onPress = {() => this.togglePreview(device.user.id)}
                 underlayColor={colors.greenSuperLight}
+                onPress = {() => this.togglePreview(device.user.id)}
               ><MaterialCommunityIcons 
                    name='eye-outline'  
                    size={20}
@@ -730,36 +728,24 @@ testPermissions= async () => {
                    backgroundColor='transparent'
               />
               </TouchableOpacity>
-
-              /*
-              <Button 
-                style={{ 
-                  margin:1, 
-                  height:40 ,
-                  marginBottom:2,
-                }}
-                color={ device.previewing ? colors.greenFlash : 'grey'}
-                title = 'Peview'
-                onPress = {() => this.togglePreview(device.user.id)}
-              />
-            */
             }
 
-            <Button 
-              style={{ 
-                margin:1, 
-                height:40 ,
-                marginBottom:2,
-              }}
-              color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
-              title = 'PHOTO'
+            <TouchableOpacity
+              style={styles.button}
+              underlayColor={colors.greenSuperLight}
               onPress = {
                 device.user.id == 'local'
                 ? () => {} // TODO
                 : () => this.sendMessage(device.user.id, 'cmd', 'takePicture')
               }
+            ><MaterialCommunityIcons 
+                 name='camera'
+                 size={20}
+                 color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
+                 backgroundColor='transparent'
             />
-
+            </TouchableOpacity>
+           
             { device.user.id  == 'local'
             ? null
             : <Button 
@@ -835,7 +821,7 @@ testPermissions= async () => {
 
   renderPreview(value){
     // console.log('renderPreview ', value);
-    if (!value.previewing
+    if (!value.distantCam || !value.previewing
     || (!value.distantPreview0 && !value.distantPreview1))
     return null;
 
@@ -912,7 +898,7 @@ testPermissions= async () => {
   toggleCam() { // Local cam.
     const devices = this.state.devices;
     devices[0].distantCam = !devices[0].distantCam;
-    this.setState({devices:devices}, function(){
+    this.setState({devices:devices}, function() {
       this.sendMessage('all', 'distantCam', devices[0].distantCam);
     });
   }
@@ -939,9 +925,11 @@ testPermissions= async () => {
 
   renderCam(){
 
-    if(this.state.devices.length>1){
-      this.sendMessage('all', 'distantCam', true);
-    }
+    // Avoid sender message on each render
+    // => done on toggleCam() 
+    // if(this.state.devices.length>1){
+    //   this.sendMessage('all', 'distantCam', true);
+    // }
 
     return (
       <ViewShot
@@ -974,7 +962,7 @@ testPermissions= async () => {
   }
 
   onPictureTaken(info){
-    console.log('onPictureTaken',info)
+    // console.log('onPictureTaken',info)
     this.setState({
       imgLocal:info.uri,
       imgLocalW:info.width,
@@ -1008,33 +996,69 @@ testPermissions= async () => {
       <View style={styles.container}>
 
 
-      <ScrollView style={{backgroundColor:'grey', paddingBottom:200}}>
+      <ScrollView style={{flex:1, backgroundColor:'grey', paddingBottom:200}}>
 
 
 
         { // Devices.
           this.state.devices.map((value, index) => {
-          //value = this.state.devices[value];
-// console.log('Devices foreach',value)
-
           // console.log('his.state.devices).map', value);
           return(
-
             <View 
               key = {value.user.id}
               >
   
-              <Button 
-                style={{ 
-                  margin:1, 
-                  height:40,
-                  marginBottom:2,
-                }}
-                title = {value.user.name}
-                color = {value.user.connected ? colors.greenFlash : 'grey'}
-                onPress = { value.user.id!='local' ? () => this.connectToDevice(value.user.id):null}
-              />
+              <View 
+              style={{flex:1,flexDirection:'row',minHeight:40,
+             backgroundColor:value.user.connected ? colors.greenFlash : 'grey',}}
+              >
+                <TouchableOpacity
+                  style={[
+                    {                     
+                      flex:1,
+                      alignItems:'center',
+                      justifyContent: 'center',
+                    }
+                  ]}
+                  activeOpacity={ value.user.id=='local' 
+                    ? 1
+                    : 0.2
+                  }
+                  onPress = { value.user.id=='local' 
+                    ? null
+                    : value.user.connected
+                      ? () => BluetoothCP.disconnectFromPeer(value.user.id)
+                      : () => this.connectTo(value.user.id)
+                  }
+                  >
+                  <Text
+                    style={{
+                      fontSize:14,
+                      fontWeight:'bold',
+                      textTransform: 'uppercase', 
+                      color:'white',
+                    }}
+                  >
+                    {value.user.name}
+                  </Text>
+                </TouchableOpacity>
          
+                { value.user.id!='local' 
+                  ? null
+                  : <TouchableOpacity
+                      style={[styles.button]}
+                      underlayColor={colors.greenSuperLight}
+                      onPress = {() =>this.getNearbyPeers()}
+                    ><MaterialCommunityIcons 
+                         name='antenna'
+                         size={40}
+                         color={'white'}
+                         backgroundColor='transparent'
+                    />
+                    </TouchableOpacity>
+                }
+              </View>
+
               { this.renderCamButton(value) }
 
               { value.user.id=='local' && value.distantCam
@@ -1061,7 +1085,7 @@ testPermissions= async () => {
 
       {this.renderModalStorage()}
 
-      {this.getDevice('local').distantMask 
+      {this.state.devices[0].distantMask 
       ? <TouchableOpacity ref="black_mask_to_save_battery"
            activeOpacity={1}
            style={{
@@ -1114,15 +1138,13 @@ testPermissions= async () => {
   renderModalStorage(){
     if(this.state.modalStorage===false) return null;
     
-    console.log('modalStorage',  this.state.modalStorage) ;
-    console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorage))
-    console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorage)].distantStorages)
-    
+    // console.log('modalStorage',  this.state.modalStorage) ;
+    // console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorage))
+    // console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorage)].distantStorages)
 
     const curPath = this.getDevice(this.state.modalStorage).distantStorages[
       this.getDevice(this.state.modalStorage).distantStorage
     ].path;
-
 
     return(
         <Modal
