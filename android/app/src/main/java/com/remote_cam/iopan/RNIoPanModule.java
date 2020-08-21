@@ -50,6 +50,9 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import android.media.ExifInterface;
 
+import android.app.Activity;
+import android.view.View;
+
 public class RNIoPanModule extends ReactContextBaseJavaModule {
 
   private Context mContext;
@@ -58,10 +61,37 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     super(reactContext);
     mContext = reactContext;
   }
-  
+
   @Override
   public String getName() {
     return "RNioPan";
+  }
+
+  @ReactMethod
+  public void hideNavigationBar() {
+    Activity activity = getCurrentActivity();
+    activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        // activity.getWindow().setDecorFitsSystemWindows(false);
+
+        activity.getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+      }
+    });
+  }
+
+  @ReactMethod
+  public void showNavigationBar() {
+    Activity activity = getCurrentActivity();
+    activity.runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        activity.getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+      }
+    });
   }
 
 
