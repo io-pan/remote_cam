@@ -86,6 +86,8 @@ export default class App extends Component<Props> {
     this.stopRecordRequested = false;
     this.previewScale=3;
     this.isMaster = null;
+    this.trustedUsers = [];
+    this.bannedUsers = [];
   }
 
   getDeviceIndex(userId){
@@ -145,16 +147,42 @@ export default class App extends Component<Props> {
     StatusBar.setHidden(true);
     SplashScreen.hide();
 
-    AsyncStorage.getItem('motion_parameters', (err, motion_parameters) => {
+     // AsyncStorage.removeItem('bannedUsers')
+     // AsyncStorage.removeItem('trustedUsers')
+     // return;
+
+       AsyncStorage.getItem('motion_parameters', (err, motion_parameters) => {
       if (err) {
-        // Alert.alert('ERROR getting locations'+ JSON.stringify(err));
+         console.log('motion_parameterserr', err)
       }
-      else {
-        if(motion_parameters){
-        }
+      else{
+        console.log('motion_parameterserr', motion_parameters)
       }
     });
+  
 
+    AsyncStorage.getItem('bannedUsers', (err, bannedUsers) => {
+      console.log('get bannedUsers');
+      
+      if (err) {
+        AsyncStorage.setItem('bannedUsers', JSON.stringify([]));
+        this.bannedUsers=[];
+      }
+      else {
+          bannedUsers= JSON.parse(bannedUsers);
+          this.bannedUsers = bannedUsers;
+      }
+    });
+    AsyncStorage.getItem('trustedUsers', (err, trustedUsers) => {
+      if (err) {
+        AsyncStorage.setItem('trustedUsers', JSON.stringify([]));
+        this.trustedUsers=[];
+      }
+      else {
+          this.trustedUsers= JSON.parse(trustedUsers);
+          console.log(this.trustedUsers)
+      }
+    });
 
     // this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
     //     Alert.alert(
@@ -1359,7 +1387,8 @@ export default class App extends Component<Props> {
                       style={{
                         width:50,
                         backgroundColor:'transparent',
-                        color: value.user.connected ? colors.greenFlash :'grey',
+                        color: this.trustedUsers.indexOf(value.user.id) >=0
+                          ? colors.greenFlash :'grey',
                       }}
                       size={40}
                     >
@@ -1368,14 +1397,15 @@ export default class App extends Component<Props> {
 
                   <TouchableOpacity 
                     // forget button
-                    onPress = {() => this.banUser(value.user)} 
+                    onPress = {() => this.banUser(value.user.id)} 
                     >
                     <MaterialCommunityIcons
                       name={ "cancel" }
                       style={{
                         width:50,
                         backgroundColor:'transparent',
-                        color: value.user.connected ? colors.greenFlash :'grey',
+                        color: this.bannedUsers.indexOf(value.user.id) >=0
+                          ? colors.greenFlash :'grey',
                       }}
                       size={40}
                     >
@@ -1393,14 +1423,17 @@ export default class App extends Component<Props> {
     );
   }
 
-  trustedUsers = [];
+
   trustUser(userId){
     let posT,posB;
-    if(posT = this.trustedUsers.indexOf(userId) < 0){
+
+    posT = this.trustedUsers.indexOf(userId);
+    if(posT < 0){
       this.trustedUsers.push(userId)
       AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
 
-      if(posB = this.bannedUsers.indexOf(userId) >= 0){
+      posB = this.bannedUsers.indexOf(userId);
+      if(posB >= 0){
         this.bannedUsers.splice(posB,1);
         AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
       }
@@ -1409,15 +1442,16 @@ export default class App extends Component<Props> {
       this.trustedUsers.splice(posT,1);
       AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
     }
+    this.setState({ state: this.state });
   }
-  bannedUsers = [];
   banUser(userId){
     let posT,posB;
-    if(posB = this.bannedUsers.indexOf(userId) < 0){
+    posB = this.bannedUsers.indexOf(userId);
+    if(posB < 0){
       this.bannedUsers.push(userId)
       AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
-
-      if(posT = this.trustedUsers.indexOf(userId) >= 0){
+      posT = this.trustedUsers.indexOf(userId)
+      if( posT>= 0){
         this.trustedUsers.splice(posT,1);
         AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
       }
@@ -1426,6 +1460,7 @@ export default class App extends Component<Props> {
       this.bannedUsers.splice(posB,1);
       AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
     }
+    this.setState({ state: this.state });
   }
 
 }
