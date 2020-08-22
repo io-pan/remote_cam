@@ -9,6 +9,7 @@ import {Platform, StyleSheet, Text, View, Image,
   StatusBar,
   BackHandler,
   Modal,
+  SectionList
 } from 'react-native';
 
 import AsyncStorage from '@react-native-community/async-storage';
@@ -41,12 +42,14 @@ const shareState = {
     distantStorage:false,
       previewing:false,
     previewDimensions:false,
+    previewRotation:0,
+    previewScale:0.3,
     distantPreviewQuality:0.5,
     distantPreview0:false,
     distantPreview1:false,
     distantPreviewCurrent:0,
-        
 };
+
 //-----------------------------------------------------------------------------------------
 export default class App extends Component<Props> {
 //-----------------------------------------------------------------------------------------
@@ -64,6 +67,8 @@ export default class App extends Component<Props> {
           distantCam:false,
           previewing:false,
           previewDimensions:false,
+          previewRotation:0,
+          previewScale:0.3,
           distantPreviewQuality:0.5,
           distantPreview0:false,
           distantPreview1:false,
@@ -75,12 +80,13 @@ export default class App extends Component<Props> {
         }
       ],
 
-      storedUsers:[],// array of {
-        //  id:, 
-        //  name:, 
-        //  connected:, 
-        //  nickname:, 
-        //  trusted: //-1=banned, 0=nothing, 1=trusted 
+      storedUsers:[],// array of 
+        //  {
+        //    id:, 
+        //    name:, 
+        //    connected:, 
+        //    nickname:, 
+        //    trusted: //-1=banned, 0=nothing, 1=trusted 
         //  }
 
       imgLocal: false,
@@ -92,7 +98,7 @@ export default class App extends Component<Props> {
     };
 
     this.stopRecordRequested = false;
-    this.previewScale=3;
+
     this.isMaster = null;
     this.trustedUsers = {}; //key(user id):value(user name)
     this.bannedUsers = {};
@@ -420,9 +426,9 @@ export default class App extends Component<Props> {
       storedUsers[index].name = user.name;
       storedUsers[index].nearby = true;
       // Auto connect.
-      if(storedUsers[index].trusted == 1){
-        this.connectTo(user.id);
-      }
+      // if(storedUsers[index].trusted == 1){
+      //   this.connectTo(user.id);
+      // }
     }
 
     this.setState({
@@ -432,38 +438,41 @@ export default class App extends Component<Props> {
 
   }
 
-  PeerLost = (user) => {
-    // console.log(user)
+  PeerLost = (lostUser) => {
+    console.log('PeerLost',lostUser);
 
     // Check if it is only a logout or a real lost.
-    BluetoothCP.getNearbyPeers((users)=>{
-
-
-      const i = this.getDeviceIndex(user.id),
-            devices = this.state.devices,
-
-
+    BluetoothCP.getNearbyPeers((nearbyUsers)=>{
+      const devices = this.state.devices,
+            i = this.getDeviceIndex(lostUser.id),
             storedUsers = this.state.storedUsers,
-            index = storedUsers.findIndex(o => o.id === user.id);
+            index = storedUsers.findIndex(o => o.id === lostUser.id),
+            stillNearby = nearbyUsers.findIndex(o => o.id === lostUser.id) > -1;
+      // console.log(nearbyUser)
 
+      if(stillNearby){
+        console.log('still nearby');
+        devices[i].user = lostUser; // disconnected.
+        storedUsers[index].connected = lostUser.connected; // disconnected.
+      }
+      else{
+        console.log('really lost');
+        devices.splice(i, 1);
 
-      const stillNearby = users.findIndex(o => o.id === user.id) >= 0;
-      //if(i!==false){
-        if(stillNearby){
-          devices[i].user = user; // disconnected.
-          storedUsers[index].connected = false; // disconnected.
+        // Keep it if trusted or banned.
+        if(storedUsers.find(o => o.id === lostUser.id).trusted!=0){
+          delete storedUsers[index].nearby;
         }
         else{
-          devices.splice(i, 1); // lost.
-          delete storedUsers[index].nearby // lost.
+          storedUsers.splice(index, 1);
         }
+      }
 
+      this.setState({
+        devices:devices,
+        storedUsers:storedUsers,
+      })
 
-        this.setState({
-          devices:devices,
-          storedUsers:storedUsers,
-        })
-      //}
     });
 
     if(!this.isMaster) {
@@ -495,14 +504,15 @@ export default class App extends Component<Props> {
     storedUsers[index].connected = true;//user.connected;
 
     this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
-      if(!this.isMaster){
-        if(!this.state.devices[0].distantCam){
-          this.toggleCam();
-        }
-        else{
-          // TODO send cam preview dimensions.
-        }
-      }
+      // Launch cam automatically.
+      // if(!this.isMaster){
+      //   if(!this.state.devices[0].distantCam){
+      //     this.toggleCam();
+      //   }
+      //   else{
+      //     // TODO send cam preview dimensions.
+      //   }
+      // }
       //else{
         // Tell others about me.
         this.sendMessage( user.id, 'fullShareSate', devices[0]);
@@ -708,8 +718,8 @@ export default class App extends Component<Props> {
 
     else if(msg.key == 'previewDimensions') {
       devices[this.getDeviceIndex(user.id)].previewDimensions = {
-            w: msg.value.split('x')[0] / this.previewScale,
-            h: msg.value.split('x')[1] / this.previewScale,
+            w: msg.value.split('x')[0] ,
+            h: msg.value.split('x')[1] ,
           };
       this.setState({devices:devices});
     }
@@ -797,11 +807,7 @@ export default class App extends Component<Props> {
 
     if(!device.user.connected) return null;
 
-    const titleBattery = (device.distantBattery && device.distantBattery.level)
-                    ? device.distantBattery.level + '%'
-                    : null
-                  
-    ,     titleStorage = (device.distantStorages && device.distantStorages[device.distantStorage] && device.distantStorages[device.distantStorage].free)
+    const titleStorage = (device.distantStorages && device.distantStorages[device.distantStorage] && device.distantStorages[device.distantStorage].free)
                     ? formatBytes(device.distantStorages[device.distantStorage].free)
                     : null
     ;
@@ -855,18 +861,7 @@ export default class App extends Component<Props> {
         </MaterialCommunityIcons>
         </TouchableOpacity>
 
-        <View style={styles.button}>
-          <MaterialCommunityIcons 
-            name='battery-40' 
-            color={'grey'}
-            backgroundColor={'transparent'}
-            size={20}
-            style={{color:'grey',width:100}}
 
-          >
-          { titleBattery}
-          </MaterialCommunityIcons>
-        </View>
 
 
         { !device.distantCam
@@ -875,17 +870,22 @@ export default class App extends Component<Props> {
             
             { device.user.id  == 'local'
             ? null
-            : <TouchableOpacity
-                style={styles.button}
-                underlayColor={colors.greenSuperLight}
-                onPress = {() => this.togglePreview(device.user.id)}
-              ><MaterialCommunityIcons 
-                   name='eye-outline'  
-                   size={20}
-                   color={ device.previewing ? colors.greenFlash : 'grey'}
-                   backgroundColor='transparent'
-              />
-              </TouchableOpacity>
+            : <View
+              // preview options
+                >
+                <TouchableOpacity
+                  style={styles.button}
+                  underlayColor={colors.greenSuperLight}
+                  onPress = {() => this.togglePreview(device.user.id)}
+                ><MaterialCommunityIcons 
+                     name='eye-outline'  
+                     size={20}
+                     color={ device.previewing ? colors.greenFlash : 'grey'}
+                     backgroundColor='transparent'
+                />
+                </TouchableOpacity>
+
+              </View>
             }
 
             <TouchableOpacity
@@ -977,19 +977,55 @@ export default class App extends Component<Props> {
     );
   }
 
+  rotatePreview(device){
+    const devices = this.state.devices;
+    devices[this.getDeviceIndex(device.user.id)].previewRotation 
+    = (devices[this.getDeviceIndex(device.user.id)].previewRotation + 90)%360; 
+
+    this.setState({devices:devices});
+  }
+
   renderPreview(value){
     // console.log('renderPreview ', value);
     if (!value.user.connected || !value.distantCam || !value.previewing
-    || (!value.distantPreview0 && !value.distantPreview1))
+    || (!value.distantPreview0 && !value.distantPreview1)
+    || !value.previewDimensions || !value.previewScale
+    )
     return null;
+
+let w,h;
+
+
+console.log('renderPreview',value.previewScale)
+
+console.log('renderPreview dim ',value.previewDimensions)
+console.log('renderPreview dim ',value.previewDimensions)
+console.log('renderPreview dim parsed w ',parseInt(value.previewDimensions.w*value.previewScale,10))
+console.log('renderPreview dim parsed h ',parseInt(value.previewDimensions.h*value.previewScale,10))
 
     return(
       <View 
-        style = {[styles.distantPreviewContainer]}
+        style={{
+          flex:1,
+          backgroundColor:'red',
+          alignSelf:'stretch',
+          alignItems:'center',
+        }}
         >
+                <TouchableOpacity
+                  style={{alignSelf:'stretch', height:40, width:40,}} 
+                  underlayColor={colors.greenSuperLight}
+                  onPress = {() => this.rotatePreview(value)}
+                ><MaterialCommunityIcons 
+                     name='phone-rotate-landscape'  
+                     size={20}
+                     color={'white'}
+                     backgroundColor='transparent'
+                />
+                </TouchableOpacity>
         <Slider  
-          ref="sampleSize"
-          style={styles.slider} 
+          ref="distantPreviewQuality"
+          style={{alignSelf:'stretch', height:40,}} 
           thumbTintColor = '#ffffff' 
           minimumTrackTintColor='#dddddd' 
           maximumTrackTintColor='#ffffff' 
@@ -999,21 +1035,48 @@ export default class App extends Component<Props> {
           value={value.distantPreviewQuality}
           onValueChange={(quality) => this.sendMessage(value.user.id, 'setPreviewQuality', quality)}
         />
+        <Slider  
+          ref="previewScale"
+          style={{alignSelf:'stretch', height:40,}} 
+          thumbTintColor = '#ffffff' 
+          minimumTrackTintColor='#dddddd' 
+          maximumTrackTintColor='#ffffff' 
+          minimumValue={0.2}
+          maximumValue={1}
+          step={0.1}
+          value={value.previewScale}
+          onValueChange={(scale) => this.setPreviewScale(value.user.id,scale)}
+        />
+    <View 
+          style = {{flexDirection:'row', flex:1}}>
+
+          <Text>,dfdfv,m</Text>
         <View 
-          style = {[styles.distantPreviewContainer]}
+          style = {[
+            value.previewRotation
+              ? { transform: [{ rotate: value.previewRotation+"deg" }]}
+              : null,
+            {
+              left:0,
+              top:0,
+              position:'relative',
+              width:parseInt(value.previewDimensions.w*value.previewScale,10),
+              height:parseInt(value.previewDimensions.h*value.previewScale,10),
+            },
+          ]}
           >
           {!value.distantPreview0 
             ? null
             : <FastImage
                 style = {[
                   styles.distantPreviewImage, 
-                  {
-                    width:value.previewDimensions.w,
-                    height:value.previewDimensions.h,
-                  },
                   value.distantPreviewCurrent == 0 
                   ? styles.zIndex0 
                   : styles.zIndex1,
+                  {
+                    width:parseInt(value.previewDimensions.w*value.previewScale,10),
+                    height:parseInt(value.previewDimensions.h*value.previewScale,10),
+                  },
                 ]}
                 source={{
                     uri: value.distantPreview0,
@@ -1034,8 +1097,8 @@ export default class App extends Component<Props> {
                   ? styles.zIndex1 
                   : styles.zIndex0,
                   {
-                    width:value.previewDimensions.w,
-                    height:value.previewDimensions.h,
+                    width:parseInt(value.previewDimensions.w*value.previewScale,10),
+                    height:parseInt(value.previewDimensions.h*value.previewScale,10),
                   },
                 ]}
                 source={{
@@ -1049,8 +1112,17 @@ export default class App extends Component<Props> {
           }
 
         </View>
+        </View>
       </View>
     );
+  }
+
+  setPreviewScale(userId,scale){
+        const devices = this.state.devices,
+          deviceIndex = this.getDeviceIndex(userId);
+
+        devices[deviceIndex].previewScale = scale;
+        this.setState({devices:devices});
   }
 
   toggleCam() { // Local cam.
@@ -1154,7 +1226,7 @@ export default class App extends Component<Props> {
   }
 
   render() {
-    // console.log('this.state.cam', this.state.cam);
+    // console.log('RENDER: this.state',this.state);
     return (
       <View style={styles.container}>
 
@@ -1168,9 +1240,15 @@ export default class App extends Component<Props> {
               >
   
               <View 
-              style={{flex:1,flexDirection:'row',minHeight:40,
-             backgroundColor:value.user.connected ? colors.greenFlash : 'grey',}}
-              >
+                style={{
+                  flex:1,
+                  flexDirection:'row',
+                  minHeight:40,
+                  // alignItems:'center',
+                  justifyContent:'center',
+                  backgroundColor:value.user.connected ? colors.greenFlash : 'grey',
+                }}
+                >
                 <TouchableOpacity
                   style={[
                     {                     
@@ -1203,7 +1281,7 @@ export default class App extends Component<Props> {
                 </TouchableOpacity>
          
                 { value.user.id!='local'
-                  ? null
+                  ? value.user.connected ? this.renderBattery(value.distantBattery) : null
                   : <TouchableOpacity
                       style={[styles.button]}
                       underlayColor={colors.greenSuperLight}
@@ -1216,6 +1294,7 @@ export default class App extends Component<Props> {
                     />
                     </TouchableOpacity>
                 }
+
               </View>
 
               { this.renderCamButton(value) }
@@ -1291,8 +1370,91 @@ export default class App extends Component<Props> {
     );
   }
 
+  renderBattery(bat){
+    if(!bat || !Number.isInteger(bat.level))
+      return null;
+
+    return(
+      <View 
+        style={{
+          paddingLeft:5, paddingRight:10,
+          flexDirection:'row',
+          alignItems:'center', justifyContent:'center',
+        }}
+        >
+        <Text 
+          style={{
+            paddingRight:3,
+            fontSize:14,
+            color: bat.level>15 ? 'white':colors.purple
+          }}>
+          { bat.level + '%'}
+        </Text> 
+        <MaterialCommunityIcons 
+          name={this.batteryIcon(bat)} 
+          color={'grey'}
+          backgroundColor={'transparent'}
+          size={16}
+          style={{color: bat.level>15 ? 'white':colors.purple}}
+          >
+        </MaterialCommunityIcons>
+
+      </View>
+    );
+  }
+  batteryIcon(bat){
+    let name = 'battery';
+    if(bat.charging){
+      name += '-charging';
+    }
+    const levelRound = Math.round(bat.level / 10) * 10;
+    if(levelRound == 0){
+      name += '-outline';
+    }
+    else{
+      name += '-'+levelRound;
+    }
+    if(name=='battery-100'){
+      name = 'battery';
+    }
+    return name;
+  }
+
   _t(str){
-    return str;
+    const lang = (Platform.OS === 'ios' ? 
+                NativeModules.SettingsManager.settings.AppleLocale:
+                NativeModules.I18nManager.localeIdentifier).substr(0,2),
+    msgs = {
+      free:{
+        en:'free',
+        fr:'libres',
+      },
+      distantDevices:{
+        en:'Distant devices',
+        fr:'Appareils distants',
+      },
+      safe:{
+        en:'Safe',
+        fr:'Sûres',
+      },
+      banned:{
+        en:'Banned',
+        fr:'Bannis',
+      },
+      availabe:{
+        en:'availabe',
+        fr:'disponibles',
+      },
+      none:{
+        en:'none',
+        fr:'aucun',
+      },
+    }
+
+    return (msgs[str] && msgs[str][lang])
+    ? msgs[str][lang]
+    : str + ' ('+lang+')'
+    ;
   }
 
 
@@ -1356,7 +1518,7 @@ export default class App extends Component<Props> {
                     <Text style={{fontSize:16,
                       color: curPath == value.path ? colors.greenFlash :'grey',
                       }}>
-                    {formatBytes(value.free)} {this._t('libres')}</Text>
+                    {formatBytes(value.free)} {this._t('free')}</Text>
                   </View>
                 </MaterialCommunityIcons>
         
@@ -1374,7 +1536,6 @@ export default class App extends Component<Props> {
     if(visible){
       BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
       BluetoothCP.browse('WIFI-BT');
-
       this.setState({modalDevices:visible});
     }
     else{
@@ -1385,157 +1546,209 @@ export default class App extends Component<Props> {
   }
 
   renderModalDevices(){
-    if(this.state.modalDevices===false) return null;
+    if(this.state.modalDevices===false) 
+      return null;
 
+    const DATA = [
+      { 
+        title : 'safe',
+        data : this.state.storedUsers.filter(o => o.trusted == 1),
+      },{
+        title : 'availabe',
+        data : this.state.storedUsers.filter(o => !o.trusted),  
+      },{
+        title : 'banned',
+        data : this.state.storedUsers.filter(o => o.trusted == -1),  
+      }
+    ];
     return(
       <Modal
         animationType="slide"
         transparent={false}
         visible={this.state.modalDevices!==false}
         onRequestClose={() => this.showDevices(false)}
-      >
+        >
+        <View
+          style={{ flex:0.3, backgroundColor:'transparent',
+              alignItems:'center', justifyContent:'center', marginBottom:1, padding:10}}
+          >
+          <Text style={{fontWeight:'normal', fontSize:26, color:'grey'}}>
+            {this._t('distantDevices')}
+          </Text>
 
-      <View style={{ flex:1,marginLeft:5}}>
-          <View style={{ flex:1}}></View>
-          <View style={{ flex:1}}>
-            {
-            this.state.storedUsers.map((user, index) =>{
-            //this.state.devices.map((device, index) => {
-              //const user=device.user;
-            return(
-              user.name == 'local'
-              ? null
-              : <View
-                  key={index}
+        </View>
+        <SectionList
+          style={{ flex:1}}
+          sections={DATA}
+          keyExtractor={(item, index) => item.id + index}
+          renderItem={({ item }) => this.renderUser(item)}
+
+          renderSectionHeader={({ section: { title } }) => (
+            <View
+              style={{ flex:1, flexDirection:'row', backgroundColor:colors.greenFlash,
+                  alignItems:'center',justifyContent:'center', marginBottom:1, padding:10}}
+              >
+                <MaterialCommunityIcons
+                  name={ title=='safe'
+                          ? 'bookmark-plus-outline' 
+                          :  title=='banned' ? 'cancel' : 'leak'}
                   style={{
-                    padding:10,
-                    flexDirection:'row', 
-                    flex:1, 
-                    justifyContent:'center', 
-                    alignItems:'center',
-                    // backgroundColor:index%2==1 ? colors.greenSuperLight : 'transparent'
-                  }}>
+                    flexDirection:'column',
+                    backgroundColor:'transparent',
+                    color: 'white',
+                    marginRight:10,
+                  }}
+                  size={30}
+                />
+              <Text style={{textTransform:'uppercase', fontWeight:'bold', fontSize:16, color:'white'}}>
+              {this._t(title)}</Text></View>
+          )}
 
-                  <TouchableOpacity 
-                    // activeOpacity={ user.id=='local' 
-                    //   ? 1
-                    //   : 0.2
-                    // }
-                    style={{
-                      flexDirection:'row', 
-                      flex:1, 
-                    }}
-                    onPress = { user.nearby
-                      ? user.connected
-                        ? () => BluetoothCP.disconnectFromPeer(user.id)
-                        : () => this.connectTo(user.id)
-                      : null
-                    }
-                    >
-                    <MaterialCommunityIcons
-                      name={ user.nearby 
-                        ? "cellphone-nfc" 
-                        : "cellphone-nfc-off" 
-                      }
-                      style={{
-                        backgroundColor:'transparent',
-                        color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
-                      }}
-                      size={40}
-                    />
-
-                    <View style={{ flex:1}}>
-                      <Text
-                        style={{
-                          color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
-                          fontSize: 18,
-                        }}
-                        >
-                        {user.name}
-                      </Text>
-                      <Text
-                        style={{
-                          color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
-                          fontSize: 14,
-                        }}
-                        >
-                        {user.id}
-                      </Text>
-                    </View>
-
-                  </TouchableOpacity>
-
-                  { user.nearby 
-                    ? <TouchableOpacity 
-                        // activeOpacity={ user.id=='local' 
-                        //   ? 1
-                        //   : 0.2
-                        // }
-                        // remember button  
-                        onPress = {() => this.storeUserStatus(user,1)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "bookmark-plus-outline" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: user.trusted == 1 ? colors.greenFlash :'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                    : null
-                  }
-
-                  { user.nearby 
-                    ? <TouchableOpacity 
-                        // ban button
-                        onPress = {() => this.storeUserStatus(user,-1)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "cancel" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: user.trusted == -1 ? colors.greenFlash :'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                    : <TouchableOpacity 
-                        // forget button
-                        onPress = {() => this.storeUserStatus(user,0)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "trash-can-outline" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: 'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                  }
-
-                </View>
-
-            )})}
-          </View>
-          <View style={{ flex:1}}></View>
-          </View>
+          renderSectionFooter={({ section: { data } }) => (
+            !data.length
+            ?  <View style={{alignItems:'center', padding:5,backgroundColor:'transparent', height:50}}><Text style={{color:'grey'}}>({this._t('none')})</Text></View>
+            :  <View
+              style={{ backgroundColor:'transparent', height:50}}
+              ></View>
+          )}
+        />
       </Modal>
-
     );
+  }
 
+  renderUser(user){
+    return(
+      <View
+         
+        style={{
+          padding:10,
+          flexDirection:'row', 
+          flex:1, 
+          justifyContent:'center', 
+          alignItems:'center',
+          // backgroundColor:index%2==1 ? colors.greenSuperLight : 'transparent'
+        }}>
 
-    // console.log('modalStorages',  this.state.modalStorages) ;
-    // console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorages))
-    // console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorages)].distantStorages)
+        <TouchableOpacity 
+          style={{
+            flexDirection:'row', 
+            flex:1, 
+          }}
+          onPress = { user.nearby
+            ? user.connected
+              ? () => BluetoothCP.disconnectFromPeer(user.id)
+              : () => this.connectTo(user.id)
+            : null
+          }
+          >
+          <MaterialCommunityIcons
+            name={ user.nearby 
+              ? "cellphone-nfc" 
+              : "cellphone-nfc-off" 
+            }
+            style={{
+              backgroundColor:'transparent',
+              color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+            }}
+            size={40}
+          />
 
+          <View style={{ flex:1}}>
+            { user.nickname
+              ? <View><Text
+                  style={{
+                    color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                    fontSize: 18,
+                  }}
+                  >
+                  {user.nickname}
+                </Text>
+                <Text
+                  style={{
+                    color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                    fontSize: 14,
+                  }}
+                  >
+                  {user.name}
+                </Text></View>
+              : <Text
+                  style={{
+                    color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                    fontSize: 18,
+                  }}
+                  >
+                  {user.name}
+                </Text>
+            }
+            <Text
+              style={{
+                color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                fontSize: 14,
+              }}
+              >
+              {user.id}
+            </Text>
+          </View>
+
+        </TouchableOpacity>
+
+        { user.nearby 
+          ? <TouchableOpacity 
+              // activeOpacity={ user.id=='local' 
+              //   ? 1
+              //   : 0.2
+              // }
+              // remember button  
+              onPress = {() => this.storeUserStatus(user,1)} 
+              >
+              <MaterialCommunityIcons
+                name={ "bookmark-plus-outline" }
+                style={{
+                  width:50,
+                  backgroundColor:'transparent',
+                  color: user.trusted == 1 ? colors.greenFlash :'grey',
+                }}
+                size={40}
+              >
+              </MaterialCommunityIcons>
+            </TouchableOpacity>
+          : null
+        }
+
+        { user.nearby 
+          ? <TouchableOpacity 
+              // ban button
+              onPress = {() => this.storeUserStatus(user,-1)} 
+              >
+              <MaterialCommunityIcons
+                name={ "cancel" }
+                style={{
+                  width:50,
+                  backgroundColor:'transparent',
+                  color: user.trusted == -1 ? colors.greenFlash :'grey',
+                }}
+                size={40}
+              >
+              </MaterialCommunityIcons>
+            </TouchableOpacity>
+          : <TouchableOpacity 
+              // forget button
+              onPress = {() => this.storeUserStatus(user,0)} 
+              >
+              <MaterialCommunityIcons
+                name={ "trash-can-outline" }
+                style={{
+                  width:50,
+                  backgroundColor:'transparent',
+                  color: 'grey',
+                }}
+                size={40}
+              >
+              </MaterialCommunityIcons>
+            </TouchableOpacity>
+        }
+      </View>
+    )
   }
 
   storeUserStatus(user, trusted){
@@ -1556,6 +1769,7 @@ export default class App extends Component<Props> {
       const o = JSON.parse(JSON.stringify(storedUsers))
       if(trusted!=0){
         delete o[index].nearby;
+        delete o[index].connected;
       }
       AsyncStorage.setItem('storedUsers', JSON.stringify(o));
     });
@@ -1580,10 +1794,10 @@ const styles = StyleSheet.create({
 
   containerPreview: {
     flex: 1,
-    flexWrap:'wrap',
+    //flexWrap:'wrap',
     // flexDirection:'row',
     // justifyContent: 'flex-end',
-    alignItems: 'center',//'flex-end',
+   // alignItems: 'center',//'flex-end',
 
   },
 
@@ -1623,22 +1837,12 @@ const styles = StyleSheet.create({
     backgroundColor:'transparent',  
   },
 
-  distantPreviewContainer:{
-
-      width: previewWidth, 
-    height: previewHeight, 
-    borderColor: 'yellow',
-    position:'relative',
-    // opacity:0,
-  },
   distantPreviewImage:{
     position:'absolute',
     top:0,
     left:0,
     // transform: [{ rotate: '90deg'}],
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'yellow',
   },
 
   captureLocalView:{
