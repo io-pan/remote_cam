@@ -54,7 +54,7 @@ export default class App extends Component<Props> {
     super(props);
     this.state = {
 
-      devices: [ // for cams handeling.
+      devices: [
         { // [0] is local device.
           user:{id:'local', name:'local', connected:true},
           distantBattery:{charging:false, level:0},
@@ -75,14 +75,6 @@ export default class App extends Component<Props> {
         }
       ],
 
-      storedUsers:[],// array of {
-        //  id:, 
-        //  name:, 
-        //  connected:, 
-        //  nickname:, 
-        //  trusted: //-1=banned, 0=nothing, 1=trusted 
-        //  }
-
       imgLocal: false,
       imgLocalW:0,
       imgLocalH:0,
@@ -94,8 +86,8 @@ export default class App extends Component<Props> {
     this.stopRecordRequested = false;
     this.previewScale=3;
     this.isMaster = null;
-    this.trustedUsers = {}; //key(user id):value(user name)
-    this.bannedUsers = {};
+    this.trustedUsersIds = [];
+    this.bannedUsersIds = [];
   }
 
   getDeviceIndex(userId){
@@ -155,11 +147,9 @@ export default class App extends Component<Props> {
     StatusBar.setHidden(true);
     SplashScreen.hide();
 
-     // AsyncStorage.removeItem('bannedUsers')
-     // AsyncStorage.removeItem('trustedUsers')
-     // AsyncStorage.removeItem('storedUsers') 
+     // AsyncStorage.removeItem('bannedUsersIds')
+     // AsyncStorage.removeItem('trustedUsersIds')
      // return;
-
 
 
     // this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -188,81 +178,74 @@ export default class App extends Component<Props> {
     this.getAvailableStorages();
     this.getBatteryInfo();
     
-
     this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected)
     this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost)
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-    BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
-    BluetoothCP.browse('WIFI-BT');
 
-    // Get stored devices.
-    AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
-      console.log('get storedUsers',storedUsers);
-      
-      if (err || storedUsers===null) {
-        AsyncStorage.setItem('storedUsers', JSON.stringify([]));
-        storedUsers=[];
-        console.log('err storedUsers',storedUsers);
+    // Get stored banned and trusted users.
+    AsyncStorage.getItem('bannedUsersIds', (err, bannedUsersIds) => {     
+           console.log('err banned' , bannedUsersIds )
+           
+      if (err) {
+var d0 = [50,60,65,90];
+        AsyncStorage.setItem('bannedUsersIds', JSON.stringify(d0));
+        this.bannedUsersIds=d0;
+
       }
       else {
-        storedUsers = JSON.parse(storedUsers);
-        console.log('ok storedUsers', storedUsers);
+        console.log('ok banned' , bannedUsersIds )
+        this.bannedUsersIds = JSON.parse(bannedUsersIds);
       }
+      console.log('banned parsed' , this.bannedUsersIds )
 
-      // Get already present devices (happend in dev when refreshing app).
-      const devices = this.state.devices;
-      BluetoothCP.getNearbyPeers((users)=>{
-        users.forEach((user,index)=>{
+      AsyncStorage.getItem('trustedUsersIds', (err, trustedUsersIds) => {
+        if (err) {
+          AsyncStorage.setItem('trustedUsersIds', JSON.stringify([]));
+          this.trustedUsersIds=[];
+        }
+        else {
+          this.trustedUsersIds = JSON.parse(trustedUsersIds);
+        }
+      console.log('trusted' , this.bannedUsersIds )
 
-            if(this.getDeviceIndex(users.id) === false    // device not  already in state
-            // && this.bannedUsersIds.indexOf(user.id) < 0
-            ){ // device not banned
-              devices.push({...shareState,  user:user});
+        // Get nearby devices (make life easier when app reload while developing)
+        const devices = this.state.devices;
+        let stateUpdateNeeded = false;
+        BluetoothCP.getNearbyPeers((users)=>{
+          users.forEach((user,index)=>{
+            if(this.getDeviceIndex(users.id) === false    // device not in already state
+            && this.bannedUsersIds.indexOf(user.id) < 0){ // device not banned
+              devices.push({...shareState,  user:user});;
+              stateUpdateNeeded = true;
 
-              // TODO auto connect if trusted
-              // if(!user.connected 
-              // && this.trustedUsersIds.indexOf(user.id) >=0){
-              //   this.connectTo(user.id);
-              // }
+              if(!user.connected 
+              && this.trustedUsersIds.indexOf(user.id) >=0){
+                this.connectTo(user.id);
+              }
             }
-
-
-          const storedUser = storedUsers.find(u => u.id === user.id);
-          // index = a.findIndex(x => x.prop2 ==="yutu");
-          if(storedUser===undefined){ // insert it
-            storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
-            //devices.push({...shareState,  user:user});; 
+          })
+          if(stateUpdateNeeded){
+            this.setState({devices:devices});
           }
-          else{ // update with connected info.
-            const index = storedUsers.findIndex(u => u.id === user.id);
-            storedUsers[index].connected = user.connected;
-            storedUsers[index].name = user.name;
-            storedUsers[index].nearby = true;
+          else{
+
           }
-        })
-        this.setState({storedUsers:storedUsers});
-        console.log('didmount',storedUsers );
-      });
-    });
 
-    // AsyncStorage.getItem('trustedUsers', (err, trustedUsers) => {
-    //   if (err || trustedUsers===null) {
-    //     AsyncStorage.setItem('trustedUsers', JSON.stringify({}));
-    //     this.trustedUsers={};
-    //   }
-    //   else {
-    //       this.trustedUsers= JSON.parse(trustedUsers);
-    //       console.log(this.trustedUsers)
-    //   }
-    // });
+        }); // getNearbyPeers
+      }); /// AsyncStorage trusted
+    }); // AsyncStorage banned
 
-    
-
+    BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
+    BluetoothCP.browse('WIFI-BT');
   }
 
   componentWillUnmount() {
+
+    BluetoothCP.stopAdvertising();
+    BluetoothCP.stopBrowsing();
+
     this.listener1.remove()
     this.listener2.remove()
     this.listener3.remove()
@@ -274,9 +257,6 @@ export default class App extends Component<Props> {
         BluetoothCP.disconnectFromPeer(item.id);
       }
     });
-
-    BluetoothCP.stopAdvertising();
-    BluetoothCP.stopBrowsing();
   }
 
 // testPermissions= async () => {
@@ -399,37 +379,19 @@ export default class App extends Component<Props> {
   //--------------------------------------------------------
 
   PeerDetected = (user) => {
-    console.log('PeerDetected',user)
+    // console.log(user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
-    const storedUsers = this.state.storedUsers,
-          devices = this.state.devices;
+    let devices = this.state.devices;
 
-    // Check if not already present in list
+    // TODO ? Auto-connection if part of trusted users.
+    // if(this.trustedUsersIds.indexOf(user.id) >=0){
+    //   this.connectTo(user.id);
+    // }
+
     if(this.getDeviceIndex(user.id)===false){
       devices.push({...shareState, user:user});
-      // this.setState({devices:devices});
+      this.setState({devices:devices});
     }
-
-    // index = a.findIndex(x => x.prop2 ==="yutu");
-    if(undefined===storedUsers.find(u => u.id === user.id)){ // insert it
-      storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
-    }
-    else{ // update with connected info.
-      const index = storedUsers.findIndex(u => u.id === user.id);
-      storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
-      storedUsers[index].name = user.name;
-      storedUsers[index].nearby = true;
-      // Auto connect.
-      if(storedUsers[index].trusted == 1){
-        this.connectTo(user.id);
-      }
-    }
-
-    this.setState({
-      devices:devices,
-      storedUser:storedUsers,
-    });
-
   }
 
   PeerLost = (user) => {
@@ -437,47 +399,32 @@ export default class App extends Component<Props> {
 
     // Check if it is only a logout or a real lost.
     BluetoothCP.getNearbyPeers((users)=>{
-
+      let stillNearby = false;
+      users.forEach(function(value,index){
+        if(value.id == user.id){
+          stillNearby = true;
+        }
+      })
 
       const i = this.getDeviceIndex(user.id),
-            devices = this.state.devices,
-
-
-            storedUsers = this.state.storedUsers,
-            index = storedUsers.findIndex(o => o.id === user.id);
-
-
-      const stillNearby = users.findIndex(o => o.id === user.id) >= 0;
-      //if(i!==false){
+            devices = this.state.devices;
+      if(i!==false){
         if(stillNearby){
           devices[i].user = user; // disconnected.
-          storedUsers[index].connected = false; // disconnected.
         }
         else{
           devices.splice(i, 1); // lost.
-          delete storedUsers[index].nearby // lost.
         }
-
-
-        this.setState({
-          devices:devices,
-          storedUsers:storedUsers,
-        })
-      //}
+        this.setState({devices:devices})
+      }
     });
 
     if(!this.isMaster) {
       BluetoothCP.advertise("WIFI-BT");
     }
-    else{
-      // Master can tap on access-point icon
-    }
-  }
-
-  getNearbyPeers(){
-    BluetoothCP.getNearbyPeers(function(devices){
-      console.log(devices)
-    });
+    // else{
+    //   // Master can tap on access-point icon
+    // }
   }
 
   Connected = (user) => {
@@ -485,16 +432,10 @@ export default class App extends Component<Props> {
     // { "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
     // Update list of devices.
-    const devices = this.state.devices,
-          storedUsers = this.state.storedUsers;
-
+    const devices = this.state.devices;
     devices[this.getDeviceIndex(user.id)].user = user;
 
-    const index = storedUsers.findIndex(o => o.id === user.id);
-    console.log(index)
-    storedUsers[index].connected = true;//user.connected;
-
-    this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
+    this.setState({ devices:devices }, function(){
       if(!this.isMaster){
         if(!this.state.devices[0].distantCam){
           this.toggleCam();
@@ -539,33 +480,25 @@ export default class App extends Component<Props> {
 
   connectTo(id){
     BluetoothCP.inviteUser(id);
-    if(this.getDeviceIndex(id) === false){
-
-    }
-    else{
-      const devices = this.state.devices,
-            storedUsers = this.state.storedUsers;
-
-      devices[this.getDeviceIndex(id)].user.connected = true;
-
-      const index = storedUsers.findIndex(o => o.id === id);
-      storedUsers[index].connected = true;
-
-      this.setState({ devices:devices ,storedUsers:storedUsers});
-    }
-
     this.isMaster = true;
   }
 
   gotInvitation = (user) => {
-    const stored = this.state.storedUsers.find(o => o.id === user.id);
-    if(stored && stored.trusted == 1){
+    if(this.bannedUsersIds.indexOf(user.id) >=0){
+      //
+    }
+    else if(this.trustedUsersIds.indexOf(user.id) >=0){
       BluetoothCP.acceptInvitation(user.id);
       this.isMaster = false;
     }
-    else{
-      alert('gotInvitation');
+    else {
+      alert('accept ?')
     }
+    // TODO: confirm dialog and list safe devices.
+    // alert(JSON.stringify(user , undefined, 2));
+    // if(this.safeIds.indexOf(user.id) >= 0) {
+
+    // }
   }
 
   sendMessage(userId, key, value){
@@ -1374,18 +1307,22 @@ export default class App extends Component<Props> {
     if(visible){
       BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
       BluetoothCP.browse('WIFI-BT');
-
-      this.setState({modalDevices:visible});
     }
     else{
       BluetoothCP.stopAdvertising();
       BluetoothCP.stopBrowsing();
-      this.setState({modalDevices:visible});
     }
+    this.setState({modalDevices:visible});
   }
 
   renderModalDevices(){
     if(this.state.modalDevices===false) return null;
+
+
+
+ BluetoothCP.getNearbyPeers( (users)=>{
+
+
 
     return(
       <Modal
@@ -1399,9 +1336,12 @@ export default class App extends Component<Props> {
           <View style={{ flex:1}}></View>
           <View style={{ flex:1}}>
             {
-            this.state.storedUsers.map((user, index) =>{
-            //this.state.devices.map((device, index) => {
-              //const user=device.user;
+            users.map((user, index) =>{
+          //this.state.devices.map((device, index) => {
+            
+            
+            const user=device.user;
+
             return(
               user.name == 'local'
               ? null
@@ -1425,21 +1365,19 @@ export default class App extends Component<Props> {
                       flexDirection:'row', 
                       flex:1, 
                     }}
-                    onPress = { user.nearby
-                      ? user.connected
-                        ? () => BluetoothCP.disconnectFromPeer(user.id)
-                        : () => this.connectTo(user.id)
-                      : null
+                    onPress = { user.connected
+                      ? () => BluetoothCP.disconnectFromPeer(user.id)
+                      : () => this.connectTo(user.id)
                     }
                     >
                     <MaterialCommunityIcons
-                      name={ user.nearby 
+                      name={ user.connected 
                         ? "cellphone-nfc" 
-                        : "cellphone-nfc-off" 
+                        : "cellphone-nfc"  //"cellphone-nfc-off" 
                       }
                       style={{
                         backgroundColor:'transparent',
-                        color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                        color: user.connected ? colors.greenFlash :'grey',
                       }}
                       size={40}
                     />
@@ -1447,7 +1385,7 @@ export default class App extends Component<Props> {
                     <View style={{ flex:1}}>
                       <Text
                         style={{
-                          color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                          color: user.connected ? colors.greenFlash :'grey',
                           fontSize: 18,
                         }}
                         >
@@ -1455,7 +1393,7 @@ export default class App extends Component<Props> {
                       </Text>
                       <Text
                         style={{
-                          color: (user.connected && user.nearby) ? colors.greenFlash :'grey',
+                          color: user.connected ? colors.greenFlash :'grey',
                           fontSize: 14,
                         }}
                         >
@@ -1465,61 +1403,43 @@ export default class App extends Component<Props> {
 
                   </TouchableOpacity>
 
-                  { user.nearby 
-                    ? <TouchableOpacity 
-                        // activeOpacity={ user.id=='local' 
-                        //   ? 1
-                        //   : 0.2
-                        // }
-                        // remember button  
-                        onPress = {() => this.storeUserStatus(user,1)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "bookmark-plus-outline" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: user.trusted == 1 ? colors.greenFlash :'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                    : null
-                  }
+                  <TouchableOpacity 
+                    // activeOpacity={ user.id=='local' 
+                    //   ? 1
+                    //   : 0.2
+                    // }
+                    // remember button  
+                    onPress = {() => this.trustUser(user.id)} 
+                    >
+                    <MaterialCommunityIcons
+                      name={ "bookmark-plus-outline" }
+                      style={{
+                        width:50,
+                        backgroundColor:'transparent',
+                        color: this.trustedUsersIds.indexOf(user.id) >=0
+                          ? colors.greenFlash :'grey',
+                      }}
+                      size={40}
+                    >
+                    </MaterialCommunityIcons>
+                  </TouchableOpacity>
 
-                  { user.nearby 
-                    ? <TouchableOpacity 
-                        // ban button
-                        onPress = {() => this.storeUserStatus(user,-1)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "cancel" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: user.trusted == -1 ? colors.greenFlash :'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                    : <TouchableOpacity 
-                        // forget button
-                        onPress = {() => this.storeUserStatus(user,0)} 
-                        >
-                        <MaterialCommunityIcons
-                          name={ "trash-can-outline" }
-                          style={{
-                            width:50,
-                            backgroundColor:'transparent',
-                            color: 'grey',
-                          }}
-                          size={40}
-                        >
-                        </MaterialCommunityIcons>
-                      </TouchableOpacity>
-                  }
+                  <TouchableOpacity 
+                    // forget button
+                    onPress = {() => this.banUser(user.id)} 
+                    >
+                    <MaterialCommunityIcons
+                      name={ "cancel" }
+                      style={{
+                        width:50,
+                        backgroundColor:'transparent',
+                        color: this.bannedUsersIds.indexOf(user.id) >=0
+                          ? colors.greenFlash :'grey',
+                      }}
+                      size={40}
+                    >
+                    </MaterialCommunityIcons>
+                  </TouchableOpacity>
 
                 </View>
 
@@ -1531,6 +1451,7 @@ export default class App extends Component<Props> {
 
     );
 
+     }); // getNearbyPeers
 
     // console.log('modalStorages',  this.state.modalStorages) ;
     // console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorages))
@@ -1538,31 +1459,47 @@ export default class App extends Component<Props> {
 
   }
 
-  storeUserStatus(user, trusted){
-    const storedUsers = this.state.storedUsers,
-          index = storedUsers.findIndex(o => o.id === user.id);
 
-    if(trusted==1){
-      storedUsers[index].trusted = storedUsers[index].trusted == 1 ? 0 : 1;
-    }
-    else if(trusted==-1){
-      storedUsers[index].trusted = storedUsers[index].trusted == -1 ? 0 : -1;
-    }
-    else{ // forget
-      storedUsers.splice(index,1);
-    }
+  trustUser(userId){
+    let posT,posB;
 
-    this.setState({ storedUsers:storedUsers } , function(){
-      const o = JSON.parse(JSON.stringify(storedUsers))
-      if(trusted!=0){
-        delete o[index].nearby;
+    posT = this.trustedUsersIds.indexOf(userId);
+    if(posT < 0){
+      this.trustedUsersIds.push(userId)
+      AsyncStorage.setItem('trustedUsersIds', JSON.stringify(this.trustedUsersIds));
+
+      posB = this.bannedUsersIds.indexOf(userId);
+      if(posB >= 0){
+        this.bannedUsersIds.splice(posB,1);
+        AsyncStorage.setItem('bannedUsersIds', JSON.stringify(this.bannedUsersIds));
       }
-      AsyncStorage.setItem('storedUsers', JSON.stringify(o));
-    });
+    }
+    else{
+      this.trustedUsersIds.splice(posT,1);
+      AsyncStorage.setItem('trustedUsersIds', JSON.stringify(this.trustedUsersIds));
+    }
+    this.setState({ state: this.state });
+  }
+  banUser(userId){
+    let posT,posB;
+    posB = this.bannedUsersIds.indexOf(userId);
+    if(posB < 0){
+      this.bannedUsersIds.push(userId)
+      AsyncStorage.setItem('bannedUsersIds', JSON.stringify(this.bannedUsersIds));
+      posT = this.trustedUsersIds.indexOf(userId)
+      if( posT>= 0){
+        this.trustedUsersIds.splice(posT,1);
+        AsyncStorage.setItem('trustedUsersIds', JSON.stringify(this.trustedUsersIds));
+      }
+    }
+    else{
+      this.bannedUsersIds.splice(posB,1);
+      AsyncStorage.setItem('bannedUsersIds', JSON.stringify(this.bannedUsersIds));
+    }
+    this.setState({ state: this.state });
   }
 
-
-} // end of component
+}
 
 const styles = StyleSheet.create({ 
   container: {
