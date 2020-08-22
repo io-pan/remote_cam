@@ -54,7 +54,7 @@ export default class App extends Component<Props> {
     super(props);
     this.state = {
 
-      devices: [
+      devices: [ // for cams handeling.
         { // [0] is local device.
           user:{id:'local', name:'local', connected:true},
           distantBattery:{charging:false, level:0},
@@ -75,6 +75,14 @@ export default class App extends Component<Props> {
         }
       ],
 
+      storedUsers:[],// array of {
+        //  id:, 
+        //  name:, 
+        //  connected:, 
+        //  nickname:, 
+        //  trusted: //-1=banned, 0=nothing, 1=trusted 
+        //  }
+
       imgLocal: false,
       imgLocalW:0,
       imgLocalH:0,
@@ -86,8 +94,8 @@ export default class App extends Component<Props> {
     this.stopRecordRequested = false;
     this.previewScale=3;
     this.isMaster = null;
-    this.trustedUsers = [];
-    this.bannedUsers = [];
+    this.trustedUsers = {}; //key(user id):value(user name)
+    this.bannedUsers = {};
   }
 
   getDeviceIndex(userId){
@@ -151,38 +159,7 @@ export default class App extends Component<Props> {
      // AsyncStorage.removeItem('trustedUsers')
      // return;
 
-       AsyncStorage.getItem('motion_parameters', (err, motion_parameters) => {
-      if (err) {
-         console.log('motion_parameterserr', err)
-      }
-      else{
-        console.log('motion_parameterserr', motion_parameters)
-      }
-    });
-  
 
-    AsyncStorage.getItem('bannedUsers', (err, bannedUsers) => {
-      console.log('get bannedUsers');
-      
-      if (err) {
-        AsyncStorage.setItem('bannedUsers', JSON.stringify([]));
-        this.bannedUsers=[];
-      }
-      else {
-          bannedUsers= JSON.parse(bannedUsers);
-          this.bannedUsers = bannedUsers;
-      }
-    });
-    AsyncStorage.getItem('trustedUsers', (err, trustedUsers) => {
-      if (err) {
-        AsyncStorage.setItem('trustedUsers', JSON.stringify([]));
-        this.trustedUsers=[];
-      }
-      else {
-          this.trustedUsers= JSON.parse(trustedUsers);
-          console.log(this.trustedUsers)
-      }
-    });
 
     // this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
     //     Alert.alert(
@@ -216,23 +193,71 @@ export default class App extends Component<Props> {
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-
-    // Get nearby & connetcted devices.
-    const devices = this.state.devices;
-    let stateUpdateNeeded = false;
-    BluetoothCP.getNearbyPeers((users)=>{
-      users.forEach((user,index)=>{
-        if(this.getDeviceIndex(users.id) === false){
-          devices.push({...shareState,  user:user});;
-          stateUpdateNeeded = true;     
-        }
-      })
-      if(stateUpdateNeeded){
-        this.setState({devices:devices});
-      }
-    });
     BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
     BluetoothCP.browse('WIFI-BT');
+
+    // Get stored devices.
+    AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
+      console.log('get storedUsers',storedUsers);
+      
+      if (err || storedUsers===null) {
+        AsyncStorage.setItem('storedUsers', JSON.stringify([]));
+        storedUsers=[];
+        console.log('err storedUsers',storedUsers);
+      }
+      else {
+        storedUsers = JSON.parse(storedUsers);
+        console.log('ok storedUsers', storedUsers);
+      }
+
+      // Get already present devices (happend in dev when refreshing app).
+      const devices = this.state.devices;
+      BluetoothCP.getNearbyPeers((users)=>{
+        users.forEach((user,index)=>{
+
+            if(this.getDeviceIndex(users.id) === false    // device not in already state
+            // && this.bannedUsersIds.indexOf(user.id) < 0
+            ){ // device not banned
+              devices.push({...shareState,  user:user});;
+
+              // TODO auto connect if trusted
+              // if(!user.connected 
+              // && this.trustedUsersIds.indexOf(user.id) >=0){
+              //   this.connectTo(user.id);
+              // }
+            }
+
+
+          const storedUser = storedUsers.find(u => u.id === user.id);
+          // index = a.findIndex(x => x.prop2 ==="yutu");
+          if(storedUser===undefined){ // insert it
+            storedUsers.push(user); 
+            //devices.push({...shareState,  user:user});; 
+          }
+          else{ // update with connected info.
+            const index = storedUsers.findIndex(u => u.id === user.id);
+            storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
+            storedUsers[index].name = user.name;
+          }
+        })
+        this.setState({storedUsers:storedUsers});
+        console.log('didmount',storedUsers );
+      });
+    });
+
+    // AsyncStorage.getItem('trustedUsers', (err, trustedUsers) => {
+    //   if (err || trustedUsers===null) {
+    //     AsyncStorage.setItem('trustedUsers', JSON.stringify({}));
+    //     this.trustedUsers={};
+    //   }
+    //   else {
+    //       this.trustedUsers= JSON.parse(trustedUsers);
+    //       console.log(this.trustedUsers)
+    //   }
+    // });
+
+    
+
   }
 
   componentWillUnmount() {
@@ -372,14 +397,32 @@ export default class App extends Component<Props> {
   //--------------------------------------------------------
 
   PeerDetected = (user) => {
-    // console.log(user)
+    console.log('PeerDetected',user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
-    let devices = this.state.devices;
+    const storedUsers = this.state.storedUsers,
+          devices = this.state.devices;
+
     // Check if not already present in list
     if(this.getDeviceIndex(user.id)===false){
       devices.push({...shareState, user:user});
-      this.setState({devices:devices});
+      // this.setState({devices:devices});
     }
+
+    // index = a.findIndex(x => x.prop2 ==="yutu");
+    if(undefined===storedUsers.find(u => u.id === user.id)){ // insert it
+      storedUsers.push(user); 
+    }
+    else{ // update with connected info.
+      const index = storedUsers.findIndex(u => u.id === user.id);
+      storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
+      storedUsers[index].name = user.name;
+    }
+
+    this.setState({
+      devices:devices,
+      storedUser:storedUsers,
+    });
+
   }
 
   PeerLost = (user) => {
@@ -387,23 +430,32 @@ export default class App extends Component<Props> {
 
     // Check if it is only a logout or a real lost.
     BluetoothCP.getNearbyPeers((users)=>{
-      let stillNearby = false;
-      users.forEach(function(value,index){
-        if(value.id == user.id){
-          stillNearby = true;
-        }
-      })
+
 
       const i = this.getDeviceIndex(user.id),
-            devices = this.state.devices;
+            devices = this.state.devices,
+
+
+            storedUsers = this.state.storedUsers,
+            index = storedUsers.findIndex(o => o.id === user.id);
+
+
+      const stillNearby = users.findIndex(o => o.id === user.id) >= 0;
       if(i!==false){
         if(stillNearby){
           devices[i].user = user; // disconnected.
+          storedUsers[index] = user; // disconnected.
         }
         else{
           devices.splice(i, 1); // lost.
+          storedUsers.splice(index, 1); // lost.
         }
-        this.setState({devices:devices})
+
+
+        this.setState({
+          devices:devices,
+          storedUsers:storedUsers,
+        })
       }
     });
 
@@ -426,10 +478,17 @@ export default class App extends Component<Props> {
     // { "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
     // Update list of devices.
-    const devices = this.state.devices;
+    const devices = this.state.devices,
+          storedUsers = this.state.storedUsers;
+
     devices[this.getDeviceIndex(user.id)].user = user;
 
-    this.setState({ devices:devices }, function(){
+    const index = storedUsers.findIndex(o => o.id === user.id);
+    console.log(index)
+    storedUsers[index].name = user.name;
+    storedUsers[index].connected = true;//user.connected;
+
+    this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
       if(!this.isMaster){
         if(!this.state.devices[0].distantCam){
           this.toggleCam();
@@ -478,9 +537,15 @@ export default class App extends Component<Props> {
 
     }
     else{
-      const devices = this.state.devices;
+      const devices = this.state.devices,
+            storedUsers = this.state.storedUsers;
+
       devices[this.getDeviceIndex(id)].user.connected = true;
-      this.setState({ devices:devices });
+
+      const index = storedUsers.findIndex(o => o.id === id);
+      storedUsers[index].connected = true;
+
+      this.setState({ devices:devices ,storedUsers:storedUsers});
     }
 
     this.isMaster = true;
@@ -1301,20 +1366,18 @@ export default class App extends Component<Props> {
     if(visible){
       BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
       BluetoothCP.browse('WIFI-BT');
+
+      this.setState({modalDevices:visible});
     }
     else{
       BluetoothCP.stopAdvertising();
       BluetoothCP.stopBrowsing();
+      this.setState({modalDevices:visible});
     }
-    this.setState({modalDevices:visible});
   }
 
   renderModalDevices(){
     if(this.state.modalDevices===false) return null;
-    
-    // console.log('modalStorages',  this.state.modalStorages) ;
-    // console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorages))
-    // console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorages)].distantStorages)
 
     return(
       <Modal
@@ -1327,9 +1390,12 @@ export default class App extends Component<Props> {
       <View style={{ flex:1,marginLeft:5}}>
           <View style={{ flex:1}}></View>
           <View style={{ flex:1}}>
-            { this.state.devices.map((value, index) =>
-             
-              value.user.name == 'local'
+            {
+            this.state.storedUsers.map((user, index) =>{
+            //this.state.devices.map((device, index) => {
+              //const user=device.user;
+            return(
+              user.name == 'local'
               ? null
               : <View
                   key={index}
@@ -1339,56 +1405,70 @@ export default class App extends Component<Props> {
                     flex:1, 
                     justifyContent:'center', 
                     alignItems:'center',
+                    // backgroundColor:index%2==1 ? colors.greenSuperLight : 'transparent'
                   }}>
 
-                  <MaterialCommunityIcons
-                    name={ value.user.connected 
-                      ? "cellphone-nfc" 
-                      : "cellphone-nfc"  //"cellphone-nfc-off" 
-                    }
+                  <TouchableOpacity 
+                    // activeOpacity={ user.id=='local' 
+                    //   ? 1
+                    //   : 0.2
+                    // }
                     style={{
-                      flexDirection:'column',
-                      backgroundColor:'transparent',
-                      color: value.user.connected ? colors.greenFlash :'grey',
+                      flexDirection:'row', 
+                      flex:1, 
                     }}
-                    size={40}
-                  >
-                  </MaterialCommunityIcons>
+                    onPress = { user.connected
+                      ? () => BluetoothCP.disconnectFromPeer(user.id)
+                      : () => this.connectTo(user.id)
+                    }
+                    >
+                    <MaterialCommunityIcons
+                      name={ user.connected 
+                        ? "cellphone-nfc" 
+                        : "cellphone-nfc"  //"cellphone-nfc-off" 
+                      }
+                      style={{
+                        backgroundColor:'transparent',
+                        color: user.connected ? colors.greenFlash :'grey',
+                      }}
+                      size={40}
+                    />
 
-                  <View style={{ flex:1}}>
-                    <Text
-                      style={{
-                        color: value.user.connected ? colors.greenFlash :'grey',
-                        fontSize: 18,
-                      }}
-                      >
-                      {value.user.name}
-                    </Text>
-                    <Text
-                      style={{
-                        color: value.user.connected ? colors.greenFlash :'grey',
-                        fontSize: 14,
-                      }}
-                      >
-                      {value.user.id}
-                    </Text>
-                  </View>
+                    <View style={{ flex:1}}>
+                      <Text
+                        style={{
+                          color: user.connected ? colors.greenFlash :'grey',
+                          fontSize: 18,
+                        }}
+                        >
+                        {user.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: user.connected ? colors.greenFlash :'grey',
+                          fontSize: 14,
+                        }}
+                        >
+                        {user.id}
+                      </Text>
+                    </View>
+
+                  </TouchableOpacity>
 
                   <TouchableOpacity 
-                    // activeOpacity={ value.user.id=='local' 
+                    // activeOpacity={ user.id=='local' 
                     //   ? 1
                     //   : 0.2
                     // }
                     // remember button  
-                    onPress = {() => this.trustUser(value.user.id)} 
+                    onPress = {() => this.trustUser(user)} 
                     >
                     <MaterialCommunityIcons
                       name={ "bookmark-plus-outline" }
                       style={{
                         width:50,
                         backgroundColor:'transparent',
-                        color: this.trustedUsers.indexOf(value.user.id) >=0
-                          ? colors.greenFlash :'grey',
+                        color: user.trusted == 1 ? colors.greenFlash :'grey',
                       }}
                       size={40}
                     >
@@ -1397,15 +1477,14 @@ export default class App extends Component<Props> {
 
                   <TouchableOpacity 
                     // forget button
-                    onPress = {() => this.banUser(value.user.id)} 
+                    onPress = {() => this.banUser(user)} 
                     >
                     <MaterialCommunityIcons
                       name={ "cancel" }
                       style={{
                         width:50,
                         backgroundColor:'transparent',
-                        color: this.bannedUsers.indexOf(value.user.id) >=0
-                          ? colors.greenFlash :'grey',
+                        color: user.trusted == -1 ? colors.greenFlash :'grey',
                       }}
                       size={40}
                     >
@@ -1414,56 +1493,42 @@ export default class App extends Component<Props> {
 
                 </View>
 
-            )}
+            )})}
           </View>
           <View style={{ flex:1}}></View>
           </View>
       </Modal>
 
     );
+
+
+    // console.log('modalStorages',  this.state.modalStorages) ;
+    // console.log('getDeviceIndex',  this.getDeviceIndex(this.state.modalStorages))
+    // console.log('distantStorages', this.state.devices[this.getDeviceIndex(this.state.modalStorages)].distantStorages)
+
   }
 
+  trustUser(user){
+    const storedUsers = this.state.storedUsers,
+          index = storedUsers.findIndex(o => o.id === user.id);
 
-  trustUser(userId){
-    let posT,posB;
+    storedUsers[index].trusted = storedUsers[index].trusted == 1 ? 0 : 1
 
-    posT = this.trustedUsers.indexOf(userId);
-    if(posT < 0){
-      this.trustedUsers.push(userId)
-      AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
-
-      posB = this.bannedUsers.indexOf(userId);
-      if(posB >= 0){
-        this.bannedUsers.splice(posB,1);
-        AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
-      }
-    }
-    else{
-      this.trustedUsers.splice(posT,1);
-      AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
-    }
-    this.setState({ state: this.state });
-  }
-  banUser(userId){
-    let posT,posB;
-    posB = this.bannedUsers.indexOf(userId);
-    if(posB < 0){
-      this.bannedUsers.push(userId)
-      AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
-      posT = this.trustedUsers.indexOf(userId)
-      if( posT>= 0){
-        this.trustedUsers.splice(posT,1);
-        AsyncStorage.setItem('trustedUsers', JSON.stringify(this.trustedUsers));
-      }
-    }
-    else{
-      this.bannedUsers.splice(posB,1);
-      AsyncStorage.setItem('bannedUsers', JSON.stringify(this.bannedUsers));
-    }
-    this.setState({ state: this.state });
+    AsyncStorage.setItem('storedUsers', JSON.stringify(storedUsers));
+    this.setState({ storedUsers: storedUsers });
   }
 
-}
+  banUser(user){
+    const storedUsers = this.state.storedUsers,
+          index = storedUsers.findIndex(o => o.id === user.id);
+
+    storedUsers[index].trusted = storedUsers[index].trusted == -1 ? 0 : -1;
+
+    AsyncStorage.setItem('storedUsers', JSON.stringify(storedUsers));
+    this.setState({ storedUsers: storedUsers });
+  }
+
+} // end of component
 
 const styles = StyleSheet.create({ 
   container: {
