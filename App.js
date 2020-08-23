@@ -27,6 +27,10 @@ import Cam from "./src/cam"
 import { colors } from "./src/colors"
 import { date2folderName, formatBytes } from './src/formatHelpers.js';
 
+import { ActionButtons, MotionSetupButtons } from "./src/cam"
+
+
+
 const previewHeight = 264;
 const previewWidth = 200;
 

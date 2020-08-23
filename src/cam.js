@@ -56,6 +56,9 @@ const landmarkSize = 2;
     const previewWidth = Dimensions.get('window').width,
           previewHeight = Dimensions.get('window').width*4/3;
 
+
+
+
 //----------------------------------------------------------------------------------------
 class Draggable extends Component { // Motion mask handles
 //----------------------------------------------------------------------------------------    
@@ -135,14 +138,23 @@ class Draggable extends Component { // Motion mask handles
 }
 
 
+
+
+
+
+
+
+
+
+
 //----------------------------------------------------------------------------------------
-class CamMotionSetupButtons extends Component { // Motion mask handles
+class MotionSetupButtons extends Component { // Motion mask handles
 //----------------------------------------------------------------------------------------    
   constructor(props) {
     super(props);
 
     this.state = {
-      motionSetup:false, // to know wich panel/slider is open.
+      motionSetupActiveButton:false, // to know wich panel/slider is open.
     };
 
     this.renderMotionSetupTodoFormHeight=300;
@@ -150,15 +162,15 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
 
 
   toggleMotionSetup(val){
-    if(this.state.motionSetup && this.state.motionSetup.indexOf(val) != -1){ 
+    if(this.state.motionSetupActiveButton && this.state.motionSetupActiveButton.indexOf(val) != -1){ 
                           // watch out threshold / threshold-rvb
       this.setState({
-        motionSetup:false,
+        motionSetupActiveButton:false,
       });
     }
     else{
       this.setState({
-        motionSetup:val,
+        motionSetupActiveButton:val,
       }); 
     }
   }
@@ -203,10 +215,8 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
   }
 
   onThreshold(mask, color){
-    const threshold = this.state.threshold & ~mask | color;
+    const threshold = this.props.threshold & ~mask | color;
     this.props.storeMotionSettings({'threshold':threshold});
-    // 
-    // this.setState({threshold:threshold}, function(){this.storeMotionSettings({'threshold':threshold})});
   }
 
   onMinimumPixels(minimumPixels){
@@ -223,15 +233,6 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
       sampleSize:sampleSize,
       minimumPixels:minimumPixels,
     });
-    // this.setState({
-    //   sampleSize:sampleSize,
-    //   minimumPixels:minimumPixels,
-    // }, function(){
-    //   this.storeMotionSettings({
-    //     sampleSize:sampleSize,
-    //     minimumPixels:minimumPixels,
-    //   });
-    // });
   }
 
 
@@ -242,32 +243,19 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
           position:'absolute', left:0, right:0, top:0, 
           backgroundColor:'rgba(0,0,0,0.5)',
           marginTop: 
-            this.state.motionSetup=='action' 
+            this.state.motionSetupActiveButton=='action' 
             || (!this.props.motionAction.type || (!this.props.motionAction.photoNumber && !this.props.motionAction.videoLength))
             ? -this.renderMotionSetupTodoFormHeight
-            : this.state.motionSetup=='minimumPixels' 
+            : this.state.motionSetupActiveButton=='minimumPixels' 
               ? -sliderHeight-30
-              : this.state.motionSetup=='threshold-rvb' 
+              : this.state.motionSetupActiveButton=='threshold-rvb' 
                 ? -sliderHeight*3
                 : -sliderHeight
         }}
         >
         <KeyboardAvoidingView behavior="padding">
 
-        {/*
-        <Button 
-          style={{ 
-            margin:1, 
-            height:40 ,
-            marginBottom:2,
-          }}
-          color={ this.props.previewing ? '#338433' : 'grey'}
-          title = 'Pause motion'
-          onPress = {() => this.togglePreviewMotion()}
-        />
-        */}
-
-        { this.state.motionSetup == 'sampleSize'
+        { this.state.motionSetupActiveButton == 'sampleSize'
         ? <Slider  
             ref="sampleSize"
             style={styles.slider} 
@@ -283,7 +271,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             } 
           />
 
-        : this.state.motionSetup == 'threshold'
+        : this.state.motionSetupActiveButton == 'threshold'
         ? <Slider  
             ref="threshold"
             style={styles.slider} 
@@ -304,7 +292,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             onValueChange={(value) => this.onThreshold(0xffffff, (-value<<16)|(-value<<8)|-value)} 
           />
 
-        : this.state.motionSetup == 'threshold-rvb'
+        : this.state.motionSetupActiveButton == 'threshold-rvb'
         ? <React.Fragment>
             <Slider  
               ref="threshold_red"
@@ -344,7 +332,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             />
             </React.Fragment>
 
-          : this.state.motionSetup == 'minimumPixels'
+          : this.state.motionSetupActiveButton == 'minimumPixels'
           ? <React.Fragment>
             <Text 
               style={{
@@ -370,7 +358,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             />
             </React.Fragment>
 
-          : this.state.motionSetup=='action' || (!this.props.motionAction.type || (!this.props.motionAction.photoNumber && !this.props.motionAction.videoLength))
+          : this.state.motionSetupActiveButton=='action' || (!this.props.motionAction.type || (!this.props.motionAction.photoNumber && !this.props.motionAction.videoLength))
           ? this.renderMotionSetupTodoForm()
           : null
         }
@@ -475,7 +463,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
   }
 
   render(){   
-    console.log('render CamMotionSetupButtons', this.props)
+    // console.log('render MotionSetupButtons', this.props)
     return(  
       <View 
         style={{flex: 1, justifyContent:'space-between', height:120}}
@@ -511,7 +499,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
               style={{fontSize:14, padding:0, margin:0, /*marginLeft:-5, marginRight:-7, paddingRight:7,*/ 
                 
                 color:
-                  this.state.motionSetup=='action' || (!this.props.motionAction.type || (!this.props.motionAction.photoNumber && !this.props.motionAction.videoLength)) 
+                  this.state.motionSetupActiveButton=='action' || (!this.props.motionAction.type || (!this.props.motionAction.photoNumber && !this.props.motionAction.videoLength)) 
                   ? colors.greenFlash 
                   : 'grey' 
               }}
@@ -558,7 +546,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             />
             <Text 
               style={{fontSize:14, padding:0, margin:0, /*marginLeft:-5, marginRight:-7, paddingRight:7,*/
-              color:this.state.motionSetup=='sampleSize' ? colors.greenFlash : 'grey' ,}}
+              color:this.state.motionSetupActiveButton=='sampleSize' ? colors.greenFlash : 'grey' ,}}
               >Précision</Text>
           </TouchableOpacity>
 
@@ -581,7 +569,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             />
             <Text 
               style={{fontSize:14, padding:0, margin:0, /*marginLeft:-5, marginRight:-7, paddingRight:7,*/
-              color:this.state.motionSetup && this.state.motionSetup.indexOf('threshold') != -1 
+              color:this.state.motionSetupActiveButton && this.state.motionSetupActiveButton.indexOf('threshold') != -1 
                 ? colors.greenFlash : 'grey' ,}}
               >Sensibilité</Text>
           </TouchableOpacity>
@@ -604,7 +592,7 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
             />
             <Text 
               style={{fontSize:14, padding:0, margin:0,  /*marginLeft:-5, marginRight:-7, paddingRight:7,*/
-              color:this.state.motionSetup=='minimumPixels' ? colors.greenFlash : 'grey' ,}}
+              color:this.state.motionSetupActiveButton=='minimumPixels' ? colors.greenFlash : 'grey' ,}}
               >Antibruit</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -668,8 +656,15 @@ class CamMotionSetupButtons extends Component { // Motion mask handles
 }
 
 
+
+
+
+
+
+
+
 //----------------------------------------------------------------------------------------
-class CamButtons extends Component {
+class ActionButtons extends Component {
 //----------------------------------------------------------------------------------------    
   constructor(props) {
     super(props);
@@ -680,7 +675,7 @@ class CamButtons extends Component {
   render(){   
     return (
       <View 
-        key="renderCamActionButtons" 
+        key="ActionButtons" 
         style={[
           styles.iconButtonContainer,
           { width: previewWidth, height:120,},
@@ -760,6 +755,15 @@ class CamButtons extends Component {
 
 
 
+
+
+
+
+
+
+
+
+
 //=========================================================================================
 //-----------------------------------------------------------------------------------------
 export default class Cam extends Component<Props> {
@@ -823,13 +827,6 @@ export default class Cam extends Component<Props> {
     }];
 
 
-    
-
-   // this.stopRecordRequested = false;
-    // TODO: http protocole.
-
-    // ],
-
     this.motionActionRunning=false;
     this.motionPhotoNumber=false;
     this.motionActionVideo=false;
@@ -846,7 +843,8 @@ export default class Cam extends Component<Props> {
         if(motion_parameters){
           motion_parameters = JSON.parse(motion_parameters);
 
-        console.log('componentDidMount',motion_parameters)
+          // console.log('<Cam> DidMount, motion_parameters',motion_parameters)
+
           this.setState({motionsetup:{
             motionAction:{
               zoom: motion_parameters.zoom ? motion_parameters.zoom : 0,
@@ -1153,7 +1151,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
           });
           ;
 
-          if (this.refs.CamButtons.stopRecordRequested || this.motionActionVideo) {
+          if (this.refs.ActionButtons.stopRecordRequested || this.motionActionVideo) {
             this.motionActionRunning = false;
             this.motionActionVideo = false;
             if(this.props.recording){
@@ -1346,21 +1344,6 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
     );
   }// renderMotion
 
-
-  toggleShape(shape){
-    // Besure displaying right handle on right place (actually reset them).
-    if (shape=='') {
-      this.handles = [{
-        x:Math.min(this.handles[0].x, this.handles[1].x),
-        y:Math.min(this.handles[0].y, this.handles[1].y),
-      },{
-        x:Math.max(this.handles[0].x, this.handles[1].x),
-        y:Math.max(this.handles[0].y, this.handles[1].y),
-      }];
-    }
-  }
-
-
   renderCamera() {
     // TODO:
     // if(this.state.connectedTo && this.camRequested){
@@ -1498,8 +1481,8 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
         { this.renderCamera() }
 
         { this.state.cam == 'motion-setup'
-          ? <CamMotionSetupButtons
-              ref="CamMotionSetupButtons"
+          ? <MotionSetupButtons
+              ref="MotionSetupButtons"
              
               motionAction={this.state.motionsetup.motionAction}
               minimumPixels={this.state.motionsetup.minimumPixels}
@@ -1510,12 +1493,11 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
 
               storeMotionSettings={(motionsettings) => this.storeMotionSettings(motionsettings)}
               closeSetupMotion={() => this.closeSetupMotion()}
-              toggleShape={(shape) => this.toggleShape(shape)}
 
               takeMotion={() => this.takeMotion()}
             /> 
-          : <CamButtons
-              ref="CamButtons"
+          : <ActionButtons
+              ref="ActionButtons"
               cam={this.state.cam}
               isRecording={this.state.isRecording}
               isTakingPicture={this.state.isTakingPicture}
