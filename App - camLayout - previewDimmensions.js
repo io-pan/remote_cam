@@ -677,15 +677,11 @@ export default class App extends Component<Props> {
 
       else if(msg.value=='startRecording'){
         this.refs.cam.videoRequested = user.id;
-        // this.refs.cam.stopRecordRequested = false;
-        this.refs.cam.refs.CamButtons.stopRecordRequested = false;
-
+        this.refs.cam.stopRecordRequested = false;
         this.refs.cam.takeVideo();
       }
       else if(msg.value=='stopRecording'){
-        // this.refs.cam.stopRecordRequested = true;
-        this.refs.cam.CamButtons.stopRecordRequested = true;
-
+        this.refs.cam.stopRecordRequested = true;
         this.refs.cam.camera.stopRecording();
       }
 
@@ -1213,12 +1209,12 @@ backgroundColor:'blue'
         key="renderCamera"
         ref="viewShot"
 
-        // onLayout={(event) => this.sendMessage(
-        //   // TODO: Tricky if cam is already ready before connection. 
-        //   'all',
-        //   'previewDimensions',
-        //   event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
-        // )}
+        onLayout={(event) => this.sendMessage(
+          // TODO: Tricky if cam is already ready before connection. 
+          'all',
+          'previewDimensions',
+          event.nativeEvent.layout.width+'x'+event.nativeEvent.layout.height
+        )}
 
         options={{
           format: "jpg", 
@@ -1229,18 +1225,18 @@ backgroundColor:'blue'
       <Cam ref="cam"
         mode='free'
         viewShotQuatity={this.state.devices[0].distantPreviewQuality}
-
+        //mode_={1}
         path = {this.getDevice('local').distantStorages[ this.getDevice('local').distantStorage ].path+'/local'}
         onPictureTaken = {(info) => this.onPictureTaken(info)} // local
         onRequestedPictureTaken = {(userId, base64) => this.sendMessage(userId, 'picture', base64)} //distant
         recording =  {(isRecording) => this.sendMessage('all', 'distantRec', isRecording)}
       
-        // onCamLayout={(w,h) => this.sendMessage(
-        //   // TODO: Tricky if cam is already ready before connection. 
-        //   'all',
-        //   'previewDimensions',
-        //   w+'x'+h
-        // )}
+        onCamLayout={(w,h) => this.sendMessage(
+          // TODO: Tricky if cam is already ready before connection. 
+          'all',
+          'previewDimensions',
+          w+'x'+h
+        )}
       />
      </ViewShot> 
     );

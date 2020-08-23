@@ -74,7 +74,7 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
       @Override
       public void run() {
         // activity.getWindow().setDecorFitsSystemWindows(false);
-
+        // !! DEPERCATED !!
         activity.getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
