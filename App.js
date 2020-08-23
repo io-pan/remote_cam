@@ -10,6 +10,8 @@ import {Platform, StyleSheet, Text, View, Image,
   BackHandler,
   Modal,
   SectionList,
+
+  Dimensions,
 } from 'react-native';
 
 import AsyncStorage from '@react-native-community/async-storage';
@@ -99,6 +101,11 @@ export default class App extends Component<Props> {
 
       modalStorages:false,
       modalDevices:false,
+      startup:{
+        browseOnStart:false,
+        advertiseOnStart:false,
+      },
+
     };
 
     this.stopRecordRequested = false;
@@ -164,13 +171,6 @@ export default class App extends Component<Props> {
     StatusBar.setHidden(true);
     SplashScreen.hide();
 
-     // AsyncStorage.removeItem('bannedUsers')
-     // AsyncStorage.removeItem('trustedUsers')
-     // AsyncStorage.removeItem('storedUsers') 
-     // return;
-
-
-
     // this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
     //     Alert.alert(
     //       "Quiter l'application ?",
@@ -186,25 +186,19 @@ export default class App extends Component<Props> {
     //     return true;
     // });
 
-        // LDPI: Portrait: 200x320px. 
-        // MDPI: Portrait: 320x480px.
-        // HDPI: Portrait: 480x800px. 
-        // XHDPI: Portrait: 720px1280px. 
-        // XXHDPI: Portrait: 960px1600px.
-        // XXXHDPI: Portrait: 1280px1920px
 
-
-    this.getAvailableStorages();
-    this.getBatteryInfo();
-    
+ 
 
     this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected)
     this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost)
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
     this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
     this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-    BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
-    BluetoothCP.browse('WIFI-BT');
+
+     // AsyncStorage.removeItem('bannedUsers')
+     // AsyncStorage.removeItem('trustedUsers')
+     // AsyncStorage.removeItem('storedUsers') 
+     // return;
 
     // Get stored devices.
     AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
@@ -213,28 +207,22 @@ export default class App extends Component<Props> {
       if (err || storedUsers===null) {
         AsyncStorage.setItem('storedUsers', JSON.stringify([]));
         storedUsers=[];
-        console.log('err storedUsers',storedUsers);
       }
       else {
         storedUsers = JSON.parse(storedUsers);
-        console.log('ok storedUsers', storedUsers);
       }
+      console.log('get storedUsers',storedUsers);
 
       // Get already present devices (happend in dev when refreshing app).
       const devices = this.state.devices;
       BluetoothCP.getNearbyPeers((users)=>{
+
         users.forEach((user,index)=>{
 
             if(this.getDeviceIndex(users.id) === false    // device not  already in state
             // && this.bannedUsersIds.indexOf(user.id) < 0
             ){ // device not banned
               devices.push({...shareState,  user:user});
-
-              // TODO auto connect if trusted
-              // if(!user.connected 
-              // && this.trustedUsersIds.indexOf(user.id) >=0){
-              //   this.connectTo(user.id);
-              // }
             }
 
 
@@ -251,24 +239,41 @@ export default class App extends Component<Props> {
             storedUsers[index].nearby = true;
           }
         })
-        this.setState({storedUsers:storedUsers});
-        console.log('didmount',storedUsers );
+
+        this.setState({storedUsers:storedUsers, function(){
+             console.log('didmount storedUsers:',storedUsers );
+        }});
+     
       });
+       
+
+      this.setState({storedUsers:storedUsers});
     });
 
-    // AsyncStorage.getItem('trustedUsers', (err, trustedUsers) => {
-    //   if (err || trustedUsers===null) {
-    //     AsyncStorage.setItem('trustedUsers', JSON.stringify({}));
-    //     this.trustedUsers={};
-    //   }
-    //   else {
-    //       this.trustedUsers= JSON.parse(trustedUsers);
-    //       console.log(this.trustedUsers)
-    //   }
-    // });
+ 
+    // Get startUp params.
+    AsyncStorage.getItem('startup', (err, startup) => {
+      console.log('get startup params',startup);
 
-    
+      if (err || startup===null) {
+        startup={advertiseOnStart:false, browseOnStart:false};
+        AsyncStorage.setItem('startup', JSON.stringify(startup));
+      }
+      else {
+        startup = JSON.parse(startup);
+        this.setState({startup:startup}, function(){
+          if(!this.state.startup.browseOnStart){
+            BluetoothCP.browse('WIFI-BT');  // "WIFI", "BT", and "WIFI-BT"
+          }
+          if(!this.state.startup.advertiseOnStart){
+            BluetoothCP.advertise('WIFI-BT');
+          }
+        });
+      }
+    });
 
+    this.getAvailableStorages();
+    this.getBatteryInfo();
   }
 
   componentWillUnmount() {
@@ -288,40 +293,6 @@ export default class App extends Component<Props> {
     BluetoothCP.stopBrowsing();
   }
 
-// testPermissions= async () => {
-
-//     try{
-//       const granted = await PermissionsAndroid.requestMultiple([
-//         PermissionsAndroid.PERMISSIONS.CAMERA,
-//         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-//         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-//         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-//         PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-//         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-//         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-//         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-
-//         PermissionsAndroid.PERMISSIONS.BLUETOOTH,
-//         PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
-//       ])
-//       if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
-//       &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
-//       // &&  granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-//       // &&  granted['android.permission.ACCESS_COARSE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-//       // &&  granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
-//       // &&  granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
-//       ){
-//          Alert.alert('PERMiSSION OK');
-//       }
-//       else {
-//          Alert.alert('NO EPRMiSSION');
-//         // Exit app.
-//       }
-//     } catch (err) {
-//       Alert.alert(err);
-//       console.warn(err)
-//     }
-// }
 
   prevBatteryState = {level: 0, charging: false};
   getBatteryInfo(){
@@ -416,29 +387,36 @@ export default class App extends Component<Props> {
     // Check if not already present in list
     if(this.getDeviceIndex(user.id)===false){
       devices.push({...shareState, user:user});
-      // this.setState({devices:devices});
     }
 
-    // index = a.findIndex(x => x.prop2 ==="yutu");
-    if(undefined===storedUsers.find(u => u.id === user.id)){ // insert it
+    if(undefined===storedUsers.find(u => u.id === user.id)){
+      // insert it
       storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
     }
-    else{ // update with connected info.
+    else{ 
+      // update with connected info.
       const index = storedUsers.findIndex(u => u.id === user.id);
       storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
       storedUsers[index].name = user.name;
       storedUsers[index].nearby = true;
-      // Auto connect.
-      // if(storedUsers[index].trusted == 1){
-      //   this.connectTo(user.id);
-      // }
+
+      // Auto connect if trusted
+      if(storedUsers[index].trusted == 1){
+        this.connectTo(user.id);
+      }
+    }
+
+    // Stop browsing/advertising if all trusted users are nearby.
+    const allhere = storedUsers.findIndex(u => (u.trusted==1 && !u.nearby)) < 0;
+    if(allhere){
+      BluetoothCP.stopAdvertising();
+      BluetoothCP.stopBrowsing();
     }
 
     this.setState({
       devices:devices,
       storedUser:storedUsers,
     });
-
   }
 
   PeerLost = (lostUser) => {
@@ -478,11 +456,11 @@ export default class App extends Component<Props> {
 
     });
 
-    if(!this.isMaster) {
+    if(this.state.startup.advertiseOnStart) {
       BluetoothCP.advertise("WIFI-BT");
     }
-    else{
-      // Master can tap on access-point icon
+    if(this.state.startup.browseOnStart) {
+      BluetoothCP.browse("WIFI-BT");
     }
   }
 
@@ -539,46 +517,71 @@ export default class App extends Component<Props> {
       })
 
     });
-    BluetoothCP.stopAdvertising();
-    BluetoothCP.stopBrowsing();
-    return;
   }
 
   gotInvitation = (user) => {
-    console.log(gotInvitation,user);
+    console.log('gotInvitation',user);
     const stored = this.state.storedUsers.find(o => o.id === user.id);
     if(stored && stored.trusted == 1){
       BluetoothCP.acceptInvitation(user.id);
       this.isMaster = false;
     }
-    else{
-      // alert('gotInvitation');
+    else if(stored && stored.trusted == -1){
+      // banned.
+    }
+    else { 
+      // ask human user.
+      Alert.alert(
+        this._t('gotInvitation'),
+        this._t('gotInvitation_msg'),
+        [
+          {
+            text: this._t('connect'),
+            onPress: () => BluetoothCP.acceptInvitation(user.id)
+          },{
+            text: this._t('connectAndAddToFavorites'), 
+            onPress: () => {
+              this.storeUserStatus(user,1);
+              BluetoothCP.acceptInvitation(user.id)
+            }
+          }, {
+            text: this._t('refuse'), 
+            onPress: () => null
+          },{
+            text: this._t('refuseAndBan'), 
+            onPress: () =>  this.storeUserStatus(user,-1)
+          },
+        ],
+      );
     }
   }
 
 
   connectTo(id){
     BluetoothCP.inviteUser(id);
-    if(this.getDeviceIndex(id) === false){
-
-    }
-    else{
-      const devices = this.state.devices,
-            storedUsers = this.state.storedUsers;
-
-      devices[this.getDeviceIndex(id)].user.connected = true;
-
-      const index = storedUsers.findIndex(o => o.id === id);
-      storedUsers[index].connected = true;
-
-      this.setState({ devices:devices ,storedUsers:storedUsers});
-    }
-
     this.isMaster = true;
+
+    // if(this.getDeviceIndex(id) === false){
+
+    // }
+    // else{
+    //   // TODO should not do this.
+    //   // updattes should be donne on  => connected()
+    //   const devices = this.state.devices,
+    //         storedUsers = this.state.storedUsers;
+
+    //   devices[this.getDeviceIndex(id)].user.connected = true;
+
+    //   const index = storedUsers.findIndex(o => o.id === id);
+    //   storedUsers[index].connected = true;
+
+    //   this.setState({ devices:devices ,storedUsers:storedUsers});
+    // }
+
   }
 
   sendMessage(userId, key, value){
-    // console.log('sendMessage')
+    // console.log('sendMessage to ', userId);
     // console.log(key, value);
     if(!userId) {
       return;
@@ -586,7 +589,7 @@ export default class App extends Component<Props> {
     else if(userId == 'all'){
       userId=[];
       this.state.devices.forEach(function(device, index){
-        if(device.user.connected){
+        if(device.user.id!='local' && device.user.connected){
           userId.push(device.user.id);
         }
       });
@@ -1504,6 +1507,16 @@ backgroundColor:'blue'
         en:'none',
         fr:'aucun',
       },
+      betteronlyone:{
+        en:'It is better to select only one of the two options, '
+          +'so the device knows if it must behave as a server or as a client.\n'
+          +'For optimal performances, your need to setup only one device as a server (the one that browses) '
+          +'and one or more clients (that advertise themself).',
+        fr:'Il est préférable de ne sélectionner  qu\'une seule des deux options '
+          +'pour que l\'appareil puisse déterminer s\'il doit se comporter en tant que serveur ou client.\n'
+          +'Pour une performance optimale, vous devez n\'avoir qu\'un seul serveur (l\'appareil qui effectue la recherche) '
+          +'et un ou plusieurs clients (les appareils qui se rendent visibles).'
+      },
     }
 
     return (msgs[str] && msgs[str][lang])
@@ -1604,6 +1617,8 @@ backgroundColor:'blue'
     if(this.state.modalDevices===false) 
       return null;
 
+    console.log('renderModalDevices', this.state.storedUsers);
+
     const DATA = [
       { 
         title : 'safe',
@@ -1624,12 +1639,93 @@ backgroundColor:'blue'
         onRequestClose={() => this.showDevices(false)}
         >
         <View
-          style={{ flex:0.3, backgroundColor:'transparent',
-              alignItems:'center', justifyContent:'center', marginBottom:1, padding:10}}
+          style={{ backgroundColor:colors.lightBackGround,
+              alignItems:'center', justifyContent:'center', paddingTop:30, paddingBottom:30}}
           >
-          <Text style={{fontWeight:'normal', fontSize:26, color:'grey'}}>
-            {this._t('distantDevices')}
-          </Text>
+                {/*                
+                <MaterialCommunityIcons 
+                  name='access-point'
+                  size={35}
+                  color={'grey'}
+                  backgroundColor='transparent'
+                  style={{}}
+                />
+                */}
+                <Text style={{fontWeight:'normal', fontSize:26, color:'grey', marginBottom:30}}>
+                  {this._t('distantDevices')}
+                </Text>
+         
+
+                <TouchableOpacity 
+                  style={{ marginLeft:30,marginRight:30,marginBottom:20,
+                    flexDirection:'row',
+                    alignItems:'center',
+                    backgroundColor:'white', 
+                    borderColor:'lightgrey', borderWidth:1
+                  }} 
+                  onPress={()=>this.setStartUpParam('browseOnStart', !this.state.startup.browseOnStart)}
+                  >
+                  <MaterialCommunityIcons
+                    name= {this.state.startup.browseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                    style={{ 
+                      color: colors.greenFlash, padding:5,
+                      backgroundColor:'transparent',
+                    }}
+                    size={25}
+                  />
+                  <Text style={{padding:5, fontSize:14, 
+                    color:'grey', backgroundColor:'white',}}>
+                    Rechercher les appareils distants au démarage de l'application
+                    </Text>
+                </TouchableOpacity> 
+
+
+                <TouchableOpacity 
+                  style={{ marginLeft:30,marginRight:30,marginBottom:20,
+                    flexDirection:'row',
+                    alignItems:'center',
+                    backgroundColor:'white', 
+                    borderColor:'lightgrey', borderWidth:1
+                  }}
+                  onPress={()=>this.setStartUpParam('advertiseOnStart', !this.state.startup.advertiseOnStart)}
+                  >
+                  <MaterialCommunityIcons
+                    name= {this.state.startup.advertiseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                    style={{ 
+                      color: colors.greenFlash, padding:5,
+                      backgroundColor:'transparent',
+                    }}
+                    size={25}
+                  />
+                  <Text style={{padding:5, fontSize:14, 
+                    color:'grey', backgroundColor:'white',}}>
+                    Rendre cet appareil visible au démarage de l'application
+                  </Text>
+                </TouchableOpacity> 
+
+                { // Warn it is better to have one master & multiple clients.
+                  this.state.startup.browseOnStart && this.state.startup.advertiseOnStart
+                  ? <View
+                      style={{flexDirection:'row', marginLeft:20,marginRight:20,
+                        backgroundColor:'transparent'
+                      }}>
+                    <MaterialCommunityIcons
+                      name= "information-outline"
+                      style={{ 
+                        color: colors.greenFlash,
+                        backgroundColor:'transparent',
+                      }}
+                      size={20}
+                    >
+                      <Text style={{fontSize:14, color:'grey'}}>
+                        {'  ' + this._t('betteronlyone')}
+                      </Text>
+
+                    </MaterialCommunityIcons>
+                      </View>
+                  : null
+                }
+
 
         </View>
         <SectionList
@@ -1669,6 +1765,12 @@ backgroundColor:'blue'
         />
       </Modal>
     );
+  }
+
+  setStartUpParam(key, value){
+    this.setState({startup:{...this.state.startup, [key]:value}}, function(){
+      AsyncStorage.setItem('startup', JSON.stringify(this.state.startup));
+    });
   }
 
   renderUser(user){
