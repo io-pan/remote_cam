@@ -55,6 +55,7 @@ npm i react-native-image-pan-zoom --save
 npm add @babel/runtime
 npm i rn-splash-screen --save
 inutile ici manifest=>android:screenOrientation="portrait" npm i react-native-orientation --save
+npm install --save @react-native-firebase/app
 npm i react-native-localization --save
 npm i react-native-vector-icons --save
     Note: D:\dev\app\SOL\node_modules\react-native-localization\android\src\main\java\com\babisoft\ReactNativeLocalization\ReactNativeLocalization.java uses or overrides a deprecated API.
