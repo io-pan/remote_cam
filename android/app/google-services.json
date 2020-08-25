@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "61246864122",
+    "firebase_url": "https://remote-cam-f728b.firebaseio.com",
+    "project_id": "remote-cam-f728b",
+    "storage_bucket": "remote-cam-f728b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61246864122:android:435df1d5ec1ca430d6e743",
+        "android_client_info": {
+          "package_name": "com.remote_cam"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "61246864122-4348sjqh8g13efhbilupbjs8b7kase7f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.remote_cam",
+            "certificate_hash": "42ffe1f3dab8a18fd0728bc51b92e276d91492f5"
+          }
+        },
+        {
+          "client_id": "61246864122-rdq5otioj89sh0gc85nb5ao79vjekek6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmg-QQTunjAhqQaDK80vfwoNxD4saqBQE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "61246864122-rdq5otioj89sh0gc85nb5ao79vjekek6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

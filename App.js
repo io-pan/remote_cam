@@ -19,7 +19,7 @@ import {Platform, StyleSheet, Text, View, Image,
   TouchableOpacity,
   Alert,
   PermissionsAndroid,
-  NativeModules,
+  NativeModules,  
   StatusBar,
   BackHandler,
   Modal,
@@ -44,7 +44,13 @@ import { date2folderName, formatBytes } from './src/formatHelpers.js';
 import Cam from "./src/cam"
 import {ActionButtons, MotionSetupButtons } from "./src/cam"
 
+import firebaseauth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
 
+
+// import * as firebase from 'firebase';
+// import '@firebase/auth';
+// import '@firebase/firestore';
 
 const previewHeight = 264;
 const previewWidth = 200;
@@ -134,6 +140,9 @@ export default class App extends Component<Props> {
     this.advertising = false;
     this.networkAnimationCanRun = true;
     this.networkAnimationTimer = null;
+
+    this.deviceId = null;
+    this.deviceName = null;
   }
 
   networkAnimation() {
@@ -331,6 +340,57 @@ export default class App extends Component<Props> {
 
     this.getAvailableStorages();
     this.getBatteryInfo();
+
+          /*
+          {
+            "rules": {
+              ".read":  "auth != null",
+              ".write": "auth != null"
+            }
+          }
+          */
+
+          // TODO.
+          this.firebaseauth  = firebaseauth();//
+            // console.log('FireBaseAuth user',this.firebaseauth);
+
+          const reference = database().ref('/ 7ea7b6331ab5c39e');
+           //  console.log('FireBaseAuth data',reference);
+
+    // Create firebase item
+    // so other can know I am online and send me messages.
+    NativeModules.RNioPan.getDeviceId((deviceId)=>{
+      this.deviceId = deviceId.substr(0,16);
+      this.deviceName = deviceId.substr(16);
+
+      database()
+      .ref('/' + this.deviceId)
+      .set({
+        name: this.deviceName,
+        messages: [/*
+          {
+            from:'debb6d214c52a5a9',  // ioS9
+            key:'cmd',
+            value:'distantCam',
+          },{
+            from:'7ea7b6331ab5c39e',  // ioS7
+            key:'cmd',
+            value:'takePicture',
+          }
+        */],
+      })
+      .then(() => {
+        // Listen for messages from firebase.
+        database()
+        .ref('/' + this.deviceId + '/messages')
+
+        // TODO create child  instead ? 
+        .on('value', snapshot => { 
+          console.log('User data: ', snapshot.val());
+        });
+      });
+    });
+
   }
 
   componentWillUnmount() {

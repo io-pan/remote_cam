@@ -1,6 +1,4 @@
-
 package com.remote_cam;
-
 
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -52,6 +50,10 @@ import android.media.ExifInterface;
 
 import android.app.Activity;
 import android.view.View;
+
+import android.provider.Settings;
+import android.provider.Settings.Secure;
+import android.bluetooth.BluetoothAdapter;
 
 public class RNIoPanModule extends ReactContextBaseJavaModule {
 
@@ -158,32 +160,13 @@ public class RNIoPanModule extends ReactContextBaseJavaModule {
     }
   }
 
-        // @ReactMethod
-        // public void getBatteryStatus(Callback successCallback) {
-        //   Intent batteryIntent = getCurrentActivity().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        //   int level = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        //   int scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+  @ReactMethod
+  public void getDeviceId(Callback successCallback) {
+    String deviceID = Settings.Secure.getString(mContext.getContentResolver(), Secure.ANDROID_ID);
+    String deviceName =BluetoothAdapter.getDefaultAdapter().getName();
 
-        //   if(level == -1 || scale == -1) {
-        //       level = 0;
-        //   }
-
-        //   int status = batteryIntent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        //   boolean isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING;
-          
-        //   WritableNativeMap rv = new WritableNativeMap();
-        //   rv.putBoolean("charging", isCharging);
-        //   rv.putInt("level", level);
-
-        //   successCallback.invoke(rv);
-        // }
-
-        // JS side:
-        // getBatteryLevel = (callback) => {
-        //   NativeModules.RNioPan.getBatteryStatus(callback);
-        // }
-        // this.getBatteryLevel( (batteryLevel) => { console.log(batteryLevel) }  );   
-
+    successCallback.invoke(deviceID + deviceName);
+  }
 
   @ReactMethod
   public void getStorages(final Promise promise) {
