@@ -1,17 +1,3 @@
-/*
-
-TODO:
-
-. www communication
-. gallery
-  . folders
-  . current session 
-  . current session per device
-. Devices tabs + prview all
-. Distant motion
-
-*/
-
 import React, {Component} from 'react';
 import {Platform, StyleSheet, Text, View, Image,
   ScrollView,
@@ -890,15 +876,13 @@ export default class App extends Component<Props> {
 
     if(!device.user.connected) return null;
 
-    const titleStorage = 
-      (device.distantStorages 
-      && device.distantStorages[device.distantStorage] 
-      && device.distantStorages[device.distantStorage].free)
-      ? formatBytes(device.distantStorages[device.distantStorage].free)
-      : null;
-
+    const titleStorage = (device.distantStorages && device.distantStorages[device.distantStorage] && device.distantStorages[device.distantStorage].free)
+                    ? formatBytes(device.distantStorages[device.distantStorage].free)
+                    : null
+    ;
     return (
       <View style = {{flexDirection:'row', backgroundColor:'white'}}>
+
         <TouchableOpacity
           style={styles.button}
           onPress={  
@@ -913,6 +897,7 @@ export default class App extends Component<Props> {
             color={device.distantCam ? colors.greenFlash : 'grey'}
             backgroundColor='transparent'
         /></TouchableOpacity>
+
 
         <TouchableOpacity
           style={styles.button}
@@ -929,6 +914,7 @@ export default class App extends Component<Props> {
              backgroundColor='transparent'
         /></TouchableOpacity>
 
+
         <TouchableOpacity
           style={styles.button}
           onPress = { () => this.showStorages(device.user.id) }
@@ -944,19 +930,86 @@ export default class App extends Component<Props> {
         </MaterialCommunityIcons>
         </TouchableOpacity>
 
-        { !device.distantCam || device.user.id  == 'local'
-        ? null
-        : <TouchableOpacity
-            style={styles.button}
-            underlayColor={colors.greenSuperLight}
-            onPress = {() => this.togglePreview(device.user.id)}
-          ><MaterialCommunityIcons 
-               name='eye-outline'  
-               size={20}
-               color={ device.previewing ? colors.greenFlash : 'grey'}
-               backgroundColor='transparent'
-          />
-          </TouchableOpacity>
+
+        { !device.distantCam || device.user.id  == 'local'}
+          ? null
+          : <View>
+            { 
+            ? null
+            : <TouchableOpacity
+                  style={styles.button}
+                  underlayColor={colors.greenSuperLight}
+                  onPress = {() => this.togglePreview(device.user.id)}
+                ><MaterialCommunityIcons 
+                     name='eye-outline'  
+                     size={20}
+                     color={ device.previewing ? colors.greenFlash : 'grey'}
+                     backgroundColor='transparent'
+                />
+                </TouchableOpacity>
+
+            }
+
+            {/*
+            <TouchableOpacity
+              style={styles.button}
+              underlayColor={colors.greenSuperLight}
+              onPress = {
+                device.user.id == 'local'
+                ? () => {} // TODO
+                : () => this.sendMessage(device.user.id, 'cmd', 'takePicture')
+              }
+            ><MaterialCommunityIcons 
+                 name='camera'
+                 size={20}
+                 color={ device.distantTakingPhoto ? colors.greenFlash : 'grey'}
+                 backgroundColor='transparent'
+            />
+            </TouchableOpacity>
+           */}
+
+            { /*
+              device.user.id  == 'local'
+            ? null
+            : <Button 
+                style={{ 
+                  margin:1, 
+                  height:40 ,
+                  marginBottom:2,
+                }}
+                color={ device.distantSnaping ? colors.greenFlash : 'grey'}
+                title = 'SNAP' // so we can have a snap while recording.
+                onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takeSnap')}
+              />
+            */}
+            {/*     
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40,
+                marginBottom:2,
+              }}
+              color= { device.distantRec ? '#843333' : 'grey'}
+              title = 'rec'
+              onPress = {
+                device.user.id == 'local'
+                ? () => {} // TODO
+                : () => this.sendMessage(device.user.id, 'cmd', 
+                          device.distantRec ? 'stopRecording':'startRecording')
+              }
+            />
+
+            <Button 
+              style={{ 
+                margin:1, 
+                height:40,
+                marginBottom:2,
+              }}
+              title = 'send toto'
+              onPress = {() => this.sendMessage(value.id, 'txt', 'toto')}
+            />
+            */}
+            </View>
         }
       </View>
     );
