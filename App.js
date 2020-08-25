@@ -11,7 +11,7 @@ import {Platform, StyleSheet, Text, View, Image,
   Modal,
   SectionList,
 
-  Dimensions,
+  Animated,
 } from 'react-native';
 
 import AsyncStorage from '@react-native-community/async-storage';
@@ -25,11 +25,10 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 // import RNExitApp from 'react-native-kill-app';
 import FastImage from 'react-native-fast-image'
 
-import Cam from "./src/cam"
 import { colors } from "./src/colors"
 import { date2folderName, formatBytes } from './src/formatHelpers.js';
-
-import { ActionButtons, MotionSetupButtons } from "./src/cam"
+import Cam from "./src/cam"
+import {ActionButtons, MotionSetupButtons } from "./src/cam"
 
 
 
@@ -49,7 +48,7 @@ const shareState = {
       previewing:false,
     previewDimensions:false,
     previewRotation:0,
-    previewScale:0.3,
+    previewScale:1,
     distantPreviewQuality:0.5,
     distantPreview0:false,
     distantPreview1:false,
@@ -74,7 +73,7 @@ export default class App extends Component<Props> {
           previewing:false,
           previewDimensions:false,
           previewRotation:0,
-          previewScale:0.3,
+          previewScale:1,
           distantPreviewQuality:0.5,
           distantPreview0:false,
           distantPreview1:false,
@@ -104,15 +103,53 @@ export default class App extends Component<Props> {
       startup:{
         browseOnStart:false,
         advertiseOnStart:false,
+        connectTrustedOnStart:false,
       },
+      // browsing:false,
+      // advertising:false,
 
+      networkIconAnimValue: new Animated.Value(0),
     };
 
     this.stopRecordRequested = false;
 
     this.isMaster = null;
     this.appWidth = 0;
+
+    this.browsing = false;
+    this.advertising = false;
+    this.networkAnimationCanRun = true;
+    this.networkAnimationTimer = null;
   }
+
+  networkAnimation() {
+    const toValue = (this.state.networkIconAnimValue._value==0) ? 15 : 0;
+    if(!this.networkAnimationCanRun && toValue==15){
+      this.networkAnimationCanRun = true;
+      return;
+    }
+    if(toValue==0){
+      Animated.timing(
+        this.state.networkIconAnimValue,
+        {
+          toValue: toValue,
+          useNativeDriver: false,
+          duration:1000,
+        }
+      ).start(() => this.networkAnimation())  
+    }
+    else{
+      Animated.timing(
+        this.state.networkIconAnimValue,
+        {
+          toValue: toValue,
+          useNativeDriver: false,
+          duration:0,
+        }
+      ).start(() => this.networkAnimation())  
+    }
+  }
+
 
   getDeviceIndex(userId){
     let rv = false;
@@ -168,6 +205,10 @@ export default class App extends Component<Props> {
 
 
   componentDidMount() {
+    // Quick anim to make button obvious.
+    this.networkAnimationCanRun = false;
+    this.networkAnimation(); 
+
     StatusBar.setHidden(true);
     SplashScreen.hide();
 
@@ -187,8 +228,6 @@ export default class App extends Component<Props> {
     // });
 
 
- 
-
     this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected)
     this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost)
     this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
@@ -202,8 +241,7 @@ export default class App extends Component<Props> {
 
     // Get stored devices.
     AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
-      console.log('get storedUsers',storedUsers);
-      
+     
       if (err || storedUsers===null) {
         AsyncStorage.setItem('storedUsers', JSON.stringify([]));
         storedUsers=[];
@@ -215,8 +253,10 @@ export default class App extends Component<Props> {
 
       // Get already present devices (happend in dev when refreshing app).
       const devices = this.state.devices;
-      BluetoothCP.getNearbyPeers((users)=>{
 
+
+      BluetoothCP.getNearbyPeers((users)=>{
+        console.log('did mount getNearbyPeers',users);
         users.forEach((user,index)=>{
 
             if(this.getDeviceIndex(users.id) === false    // device not  already in state
@@ -224,7 +264,6 @@ export default class App extends Component<Props> {
             ){ // device not banned
               devices.push({...shareState,  user:user});
             }
-
 
           const storedUser = storedUsers.find(u => u.id === user.id);
           // index = a.findIndex(x => x.prop2 ==="yutu");
@@ -243,11 +282,12 @@ export default class App extends Component<Props> {
         this.setState({storedUsers:storedUsers, function(){
              console.log('didmount storedUsers:',storedUsers );
         }});
-     
       });
        
 
-      this.setState({storedUsers:storedUsers});
+      this.setState({storedUsers:storedUsers}, function(){
+        // TODO ? should set up listener here
+      });
     });
 
  
@@ -256,17 +296,20 @@ export default class App extends Component<Props> {
       console.log('get startup params',startup);
 
       if (err || startup===null) {
-        startup={advertiseOnStart:false, browseOnStart:false};
+        startup = this.state.startup;
         AsyncStorage.setItem('startup', JSON.stringify(startup));
       }
       else {
         startup = JSON.parse(startup);
         this.setState({startup:startup}, function(){
-          if(!this.state.startup.browseOnStart){
-            BluetoothCP.browse('WIFI-BT');  // "WIFI", "BT", and "WIFI-BT"
+              console.log('get startup params state',this.state.startup);
+          if(this.state.startup.browseOnStart){
+            this.browse();  // "WIFI", "BT", and "WIFI-BT"
+            this.networkAnimationTimer = setTimeout( ()=>{this.stopBrowsing()}, 30*1000);
           }
-          if(!this.state.startup.advertiseOnStart){
-            BluetoothCP.advertise('WIFI-BT');
+          if(this.state.startup.advertiseOnStart){
+            this.advertise();
+            this.networkAnimationTimer = setTimeout( ()=>{this.stopAdvertising()}, 30*1000);
           }
         });
       }
@@ -289,8 +332,8 @@ export default class App extends Component<Props> {
       }
     });
 
-    BluetoothCP.stopAdvertising();
-    BluetoothCP.stopBrowsing();
+    this.stopAdvertising();
+    this.stopBrowsing();
   }
 
 
@@ -377,6 +420,34 @@ export default class App extends Component<Props> {
   //--------------------------------------------------------
   //            P2P communication
   //--------------------------------------------------------
+  advertise(){
+    if(!this.advertising){ // avoid launching anim more than once.
+      this.advertising = true;
+      BluetoothCP.advertise('WIFI-BT');
+      if(!this.browsing){
+        this.networkAnimation();
+      }
+    }
+  }
+  browse(){
+    if(!this.browsing){
+      this.browsing = true;
+      BluetoothCP.browse('WIFI-BT');
+      if(!this.advertising){
+        this.networkAnimation();
+      }
+    }
+  }
+  stopAdvertising(){
+    this.advertising = false;
+    this.networkAnimationCanRun = false;
+    BluetoothCP.stopAdvertising();
+  }
+  stopBrowsing(){
+    this.browsing = false;
+    this.networkAnimationCanRun = false;
+    BluetoothCP.stopBrowsing();
+  }
 
   PeerDetected = (user) => {
     console.log('PeerDetected',user)
@@ -401,7 +472,7 @@ export default class App extends Component<Props> {
       storedUsers[index].nearby = true;
 
       // Auto connect if trusted
-      if(storedUsers[index].trusted == 1){
+      if(storedUsers[index].trusted == 1 && this.state.startup.connectTrustedOnStart){
         this.connectTo(user.id);
       }
     }
@@ -409,8 +480,9 @@ export default class App extends Component<Props> {
     // Stop browsing/advertising if all trusted users are nearby.
     const allhere = storedUsers.findIndex(u => (u.trusted==1 && !u.nearby)) < 0;
     if(allhere){
-      BluetoothCP.stopAdvertising();
-      BluetoothCP.stopBrowsing();
+      // TODO
+      // this.stopAdvertising();
+      // this.stopBrowsing();
     }
 
     this.setState({
@@ -433,16 +505,26 @@ export default class App extends Component<Props> {
 
       if(stillNearby){
         console.log('still nearby');
-        devices[i].user = lostUser; // disconnected.
-        storedUsers[index].connected = lostUser.connected; // disconnected.
+        devices[i].user = lostUser; // Disconnected.
+        storedUsers[index].connected = lostUser.connected;
       }
       else{
         console.log('really lost');
         devices.splice(i, 1);
 
-        // Keep it if trusted or banned.
+        // If trusted or banned, keep it in list.
         if(storedUsers.find(o => o.id === lostUser.id).trusted!=0){
           delete storedUsers[index].nearby;
+
+          // if trusted research it.
+          if(storedUsers.find(o => o.id === lostUser.id).trusted==1){
+            if(this.state.startup.advertiseOnStart) {
+              this.advertise();
+            }
+            if(this.state.startup.browseOnStart) {
+              this.browse();
+            }
+          }
         }
         else{
           storedUsers.splice(index, 1);
@@ -453,15 +535,7 @@ export default class App extends Component<Props> {
         devices:devices,
         storedUsers:storedUsers,
       })
-
     });
-
-    if(this.state.startup.advertiseOnStart) {
-      BluetoothCP.advertise("WIFI-BT");
-    }
-    if(this.state.startup.browseOnStart) {
-      BluetoothCP.browse("WIFI-BT");
-    }
   }
 
   Connected = (user) => {
@@ -475,7 +549,6 @@ export default class App extends Component<Props> {
     devices[this.getDeviceIndex(user.id)].user = user;
 
     const index = storedUsers.findIndex(o => o.id === user.id);
-    console.log(index)
     storedUsers[index].connected = true;//user.connected;
 
     this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
@@ -522,7 +595,7 @@ export default class App extends Component<Props> {
   gotInvitation = (user) => {
     console.log('gotInvitation',user);
     const stored = this.state.storedUsers.find(o => o.id === user.id);
-    if(stored && stored.trusted == 1){
+    if(stored && stored.trusted == 1  && this.state.startup.connectTrustedOnStart){
       BluetoothCP.acceptInvitation(user.id);
       this.isMaster = false;
     }
@@ -532,25 +605,29 @@ export default class App extends Component<Props> {
     else { 
       // ask human user.
       Alert.alert(
-        this._t('gotInvitation'),
-        this._t('gotInvitation_msg'),
+        this._t('gotInvitation') + '\n\n' + user.name,
+        'id: '+ user.id +'\n' + this._t('gotInvitation_msg'),
         [
           {
             text: this._t('connect'),
             onPress: () => BluetoothCP.acceptInvitation(user.id)
-          },{
-            text: this._t('connectAndAddToFavorites'), 
-            onPress: () => {
-              this.storeUserStatus(user,1);
-              BluetoothCP.acceptInvitation(user.id)
-            }
-          }, {
-            text: this._t('refuse'), 
-            onPress: () => null
-          },{
-            text: this._t('refuseAndBan'), 
-            onPress: () =>  this.storeUserStatus(user,-1)
           },
+          // {
+          //   text: this._t('connectAndAddToFavorites'), 
+          //   onPress: () => {
+          //     this.storeUserStatus(user,1);
+          //     BluetoothCP.acceptInvitation(user.id)
+          //   }
+          // },
+          {
+            text: this._t('refuse'), 
+            style: "cancel",
+            onPress: () => null
+          },
+          // {
+          //   text: this._t('refuseAndBan'), 
+          //   onPress: () =>  this.storeUserStatus(user,-1)
+          // },
         ],
       );
     }
@@ -685,13 +762,13 @@ export default class App extends Component<Props> {
       else if(msg.value=='startRecording'){
         this.refs.cam.videoRequested = user.id;
         // this.refs.cam.stopRecordRequested = false;
-        this.refs.cam.refs.CamButtons.stopRecordRequested = false;
+        this.refs.cam.refs.ActionButtons.stopRecordRequested = false;
 
         this.refs.cam.takeVideo();
       }
       else if(msg.value=='stopRecording'){
         // this.refs.cam.stopRecordRequested = true;
-        this.refs.cam.CamButtons.stopRecordRequested = true;
+        this.refs.cam.refs.ActionButtons.stopRecordRequested = true;
 
         this.refs.cam.camera.stopRecording();
       }
@@ -723,14 +800,13 @@ export default class App extends Component<Props> {
       });
     }
 
-    else if(msg.key == 'previewDimensions') {
-      console.log('previewDimensions', msg.value)
-      devices[this.getDeviceIndex(user.id)].previewDimensions = {
-            w: msg.value.split('x')[0] ,
-            h: msg.value.split('x')[1] ,
-          };
-      this.setState({devices:devices});
-    }
+    // else if(msg.key == 'previewDimensions') {
+    //   devices[this.getDeviceIndex(user.id)].previewDimensions = {
+    //         w: msg.value.split('x')[0] ,
+    //         h: msg.value.split('x')[1] ,
+    //       };
+    //   this.setState({devices:devices});
+    // }
 
     else if( msg.key == 'setStorage' ) { 
       this.setStorage('local', msg.value);
@@ -870,18 +946,13 @@ export default class App extends Component<Props> {
         </TouchableOpacity>
 
 
-
-
         { !device.distantCam
           ? null
           : <View>
             
             { device.user.id  == 'local'
             ? null
-            : <View
-              // preview options
-                >
-                <TouchableOpacity
+            : <TouchableOpacity
                   style={styles.button}
                   underlayColor={colors.greenSuperLight}
                   onPress = {() => this.togglePreview(device.user.id)}
@@ -893,9 +964,9 @@ export default class App extends Component<Props> {
                 />
                 </TouchableOpacity>
 
-              </View>
             }
 
+            {/*
             <TouchableOpacity
               style={styles.button}
               underlayColor={colors.greenSuperLight}
@@ -911,8 +982,10 @@ export default class App extends Component<Props> {
                  backgroundColor='transparent'
             />
             </TouchableOpacity>
-           
-            { device.user.id  == 'local'
+           */}
+
+            { /*
+              device.user.id  == 'local'
             ? null
             : <Button 
                 style={{ 
@@ -924,8 +997,8 @@ export default class App extends Component<Props> {
                 title = 'SNAP' // so we can have a snap while recording.
                 onPress = {() => this.sendMessage(device.user.id, 'cmd', 'takeSnap')}
               />
-            }
-
+            */}
+            {/*     
             <Button 
               style={{ 
                 margin:1, 
@@ -943,7 +1016,7 @@ export default class App extends Component<Props> {
             />
 
 
-            {/*     
+
             <Button 
               style={{ 
                 margin:1, 
@@ -993,45 +1066,144 @@ export default class App extends Component<Props> {
     this.setState({devices:devices});
   }
 
-  renderPreview(value){
-    // console.log('renderPreview ', value);
-    if (!value.user.connected || !value.distantCam || !value.previewing
-    || (!value.distantPreview0 && !value.distantPreview1)
-    || !value.previewDimensions || !value.previewScale
+  renderPreview(device){
+
+    // console.log('renderPreview  --------')
+    // console.log('renderPreview ', device...);
+
+    if (!device.user.connected || !device.distantCam || !device.previewing
+    || (!device.distantPreview0 && !device.distantPreview1)
+    // || !device.previewDimensions
+     || !device.previewScale
     )
     return null;
 
-    const w = (value.previewRotation==0||value.previewRotation==180)
-              ? Math.round(this.appWidth * value.previewScale)
-              : Math.round(this.appWidth * value.previewDimensions.w / value.previewDimensions.h
-                            * value.previewScale),
-          h = (value.previewRotation==0||value.previewRotation==180)
-              ? Math.round(this.appWidth * value.previewDimensions.h / value.previewDimensions.w
-                            * value.previewScale)
-              : Math.round(this.appWidth*value.previewScale);
+    const w = (device.previewRotation==0||device.previewRotation==180)
+              ? Math.round(this.appWidth * device.previewScale)
+              : Math.round(this.appWidth * 3 / 4
+                            * device.previewScale),
+          h = (device.previewRotation==0||device.previewRotation==180)
+              ? Math.round(this.appWidth * 4 / 3
+                            * device.previewScale)
+              : Math.round(this.appWidth*device.previewScale);
 
-    const gap = (value.previewRotation==90)
+    const gap = (device.previewRotation==90)
                 ? (w-h)/ 2
-                : (value.previewRotation==270)
+                : (device.previewRotation==270)
                   ? -(w-h)/ 2
                   :0;
+    // const w = (device.previewRotation==0||device.previewRotation==180)
+    //           ? Math.round(this.appWidth * device.previewScale)
+    //           : Math.round(this.appWidth * device.previewDimensions.w / device.previewDimensions.h
+    //                         * device.previewScale),
+    //       h = (device.previewRotation==0||device.previewRotation==180)
+    //           ? Math.round(this.appWidth * device.previewDimensions.h / device.previewDimensions.w
+    //                         * device.previewScale)
+    //           : Math.round(this.appWidth*device.previewScale);
 
+    // const gap = (device.previewRotation==90)
+    //             ? (w-h)/ 2
+    //             : (device.previewRotation==270)
+    //               ? -(w-h)/ 2
+    //               :0;
 
-// console.log('renderPreview',value.previewScale)
-
-// console.log('renderPreview dim ',value.previewDimensions)
-// console.log('renderPreview dim ',value.previewDimensions)
-// console.log('renderPreview dim parsed w ',parseInt(value.previewDimensions.w*value.previewScale,10))
-// console.log('renderPreview dim parsed h ',h)
 
     return(
-      <View 
-        style={{
-          flex:1,
-          backgroundColor:'red',
-          alignItems:'center',
+      <View style={{
+          flex:1, alignItems:'center',
+          backgroundColor:colors.lightBackGround,
         }}
         >
+
+
+
+        <View 
+          pointerEvents="none"
+          style = {[
+            device.previewRotation
+              ? { transform: [
+                  { rotate: device.previewRotation+"deg"},
+                  { translateX: gap},
+
+              ]}
+              : null,
+            {
+              width:w,
+              height:h,
+              backgroundColor:'grey'
+            },
+          ]}
+          >
+
+          {!device.distantPreview0 
+            ? null
+            : <FastImage
+                style = {[
+                  styles.distantPreviewImage, 
+                  device.distantPreviewCurrent == 0 
+                  ? styles.zIndex0 
+                  : styles.zIndex1,
+                  {
+                    width:w,
+                    height:h,
+                  },
+                ]}
+                source={{
+                    uri: device.distantPreview0,
+                    headers: { Authorization: 'someAuthToken' },
+                    priority: FastImage.priority.high ,
+                }}
+                resizeMode={FastImage.resizeMode.contain}
+                // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
+                onLoad={e => this.sendMessage(device.user.id, 'cmd', 'viewShot')}
+              />
+          }
+          {!device.distantPreview1
+            ? null
+            : <FastImage
+                style = {[
+                  styles.distantPreviewImage, 
+                  device.distantPreviewCurrent == 0 
+                  ? styles.zIndex1 
+                  : styles.zIndex0,
+                  {
+                    width:w,
+                    height:h,
+                  },
+                ]}
+                source={{
+                    uri: device.distantPreview1,
+                    headers: { Authorization: 'someAuthToken' },
+                    priority: FastImage.priority.high ,
+                }}
+                resizeMode={FastImage.resizeMode.contain}
+                onLoad={e => this.sendMessage(device.user.id, 'cmd', 'viewShot')}
+              />
+          }
+        </View>
+        <View
+          style={{
+          marginTop:-1*Math.abs(2*gap)
+          //   transform: [ { translateY: gap*2},  ]
+        }}
+        >
+        <ActionButtons
+          ref="ActionButtons"
+          isTakingPicture={device.distantTakingPhoto}
+          isRecording={device.distantRec}
+          motionDetectionMode={null}
+          motionsCount={0}
+
+          takePicture={ device.distantRec
+            ? () => this.sendMessage(device.user.id, 'cmd', 'takeSnap')
+            : () => this.sendMessage(device.user.id, 'cmd', 'takePicture')
+          }
+
+          takeVideo={() => this.sendMessage(device.user.id, 'cmd', 'startRecording')}
+          stopRecording={() => this.sendMessage(device.user.id, 'cmd', 'stopRecording')}
+
+          onMotionButton={()=> {}}
+        /> 
 
         <View
           style={{
@@ -1048,116 +1220,43 @@ export default class App extends Component<Props> {
               justifyContent:'center',
               height:50, width:50,}} 
             underlayColor={colors.greenSuperLight}
-            onPress = {() => this.rotatePreview(value)}
+            onPress = {() => this.rotatePreview(device)}
           ><MaterialCommunityIcons 
                name='phone-rotate-landscape'  
                size={30}
-               color={'white'}
+               color={colors.greenFlash}
                backgroundColor='transparent'
           />
           </TouchableOpacity>
           <Slider  
+            ref="distantPreviewQuality"
+            style={{flex:1, height:50}} 
+            thumbTintColor = {colors.greenFlash}
+            minimumTrackTintColor={colors.greenFlash}
+            maximumTrackTintColor={colors.greenFlash} 
+            minimumValue={0.1}
+            maximumValue={0.95}
+            step={0.05}
+            value={device.distantPreviewQuality}
+            onValueChange={(quality) => this.sendMessage(device.user.id, 'setPreviewQuality', quality)}
+          />
+          {/*
+          <Slider  
             ref="previewScale"
             style={{flex:1, height:50}} 
-            thumbTintColor = '#ffffff' 
-            minimumTrackTintColor='#dddddd' 
-            maximumTrackTintColor='#ffffff' 
+            thumbTintColor = {colors.greenFlash}
+            minimumTrackTintColor={colors.greenFlash}
+            maximumTrackTintColor={colors.greenFlash} 
             minimumValue={0.2}
             maximumValue={1}
             step={0.1}
-            value={value.previewScale}
-            onValueChange={(scale) => this.setPreviewScale(value.user.id,scale)}
+            value={device.previewScale}
+            onValueChange={(scale) => this.setPreviewScale(device.user.id,scale)}
           />
+        */}
+        </View>
         </View>
 
-        <Slider  
-          ref="distantPreviewQuality"
-          style={{alignSelf:'stretch', height:50,
-          backgroundColor:'green',}} 
-          thumbTintColor = '#ffffff' 
-          minimumTrackTintColor='#dddddd' 
-          maximumTrackTintColor='#ffffff' 
-          minimumValue={0.1}
-          maximumValue={0.95}
-          step={0.05}
-          value={value.distantPreviewQuality}
-          onValueChange={(quality) => this.sendMessage(value.user.id, 'setPreviewQuality', quality)}
-        />
-
-        <View 
-          pointerEvents="none"
-          style = {[
-            value.previewRotation
-              ? { transform: [
-                  { rotate: value.previewRotation+"deg"},
-                  { translateX: gap},
-
-              ]}
-              : null,
-                 {
-               // translateX: 50},{translateY: 50
-                },
-         
-            {
-                  
-             
-backgroundColor:'blue'
-            },
-            {
-              width:w,
-              height:h,
-            },
-          ]}
-          >
-       
-
-
-          {!value.distantPreview0 
-            ? null
-            : <FastImage
-                style = {[
-                  styles.distantPreviewImage, 
-                  value.distantPreviewCurrent == 0 
-                  ? styles.zIndex0 
-                  : styles.zIndex1,
-                  {
-                    width:w,
-                    height:h,
-                  },
-                ]}
-                source={{
-                    uri: value.distantPreview0,
-                    headers: { Authorization: 'someAuthToken' },
-                    priority: FastImage.priority.high ,
-                }}
-                resizeMode={FastImage.resizeMode.contain}
-                // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-                onLoad={e => this.sendMessage(value.user.id, 'cmd', 'viewShot')}
-              />
-          }
-          {!value.distantPreview1
-            ? null
-            : <FastImage
-                style = {[
-                  styles.distantPreviewImage, 
-                  value.distantPreviewCurrent == 0 
-                  ? styles.zIndex1 
-                  : styles.zIndex0,
-                  {
-                    width:w,
-                    height:h,
-                  },
-                ]}
-                source={{
-                    uri: value.distantPreview1,
-                    headers: { Authorization: 'someAuthToken' },
-                    priority: FastImage.priority.high ,
-                }}
-                resizeMode={FastImage.resizeMode.contain}
-                onLoad={e => this.sendMessage(value.user.id, 'cmd', 'viewShot')}
-              />
-          }
-        </View>
       </View>
     );
   }
@@ -1307,12 +1406,14 @@ backgroundColor:'blue'
                   backgroundColor:value.user.connected ? colors.greenFlash : 'grey',
                 }}
                 >
+
                 <TouchableOpacity
                   style={[
                     {                     
                       flex:1,
                       alignItems:'center',
                       justifyContent: 'center',
+                      borderRightWidth:1, borderColor:'white',
                     }
                   ]}
                   activeOpacity={ value.user.id=='local' 
@@ -1344,13 +1445,28 @@ backgroundColor:'blue'
                       style={[styles.button]}
                       underlayColor={colors.greenSuperLight}
                       onPress = { () =>this.showDevices(true) }
-                    ><MaterialCommunityIcons 
-                         name='access-point'
-                         size={40}
-                         color={'white'}
-                         backgroundColor='transparent'
-                    />
-                    </TouchableOpacity>
+                    >
+                    <View style={{position:'relative',width:40,height:40, marginRight:10,  }}>
+                      <MaterialCommunityIcons
+                        name='access-point' 
+                        size={40}
+                        color={'white'}
+                        backgroundColor = 'transparent'
+                        style={{
+                          position:'absolute',alignSelf: 'center',
+                        }}
+                      />
+                      <Animated.View style={{
+                        position:'absolute',
+                        borderRadius:40, 
+                        borderWidth: this.state.networkIconAnimValue,
+                        borderColor:colors.greenFlash,  
+                        opacity:0.6,
+                        width:40,
+                        height:40}}
+                      />
+                    </View>  
+                  </TouchableOpacity>
                 }
 
               </View>
@@ -1478,54 +1594,6 @@ backgroundColor:'blue'
     return name;
   }
 
-  _t(str){
-    const lang = (Platform.OS === 'ios' ? 
-                NativeModules.SettingsManager.settings.AppleLocale:
-                NativeModules.I18nManager.localeIdentifier).substr(0,2),
-    msgs = {
-      free:{
-        en:'free',
-        fr:'libres',
-      },
-      distantDevices:{
-        en:'Distant devices',
-        fr:'Appareils distants',
-      },
-      safe:{
-        en:'Safe',
-        fr:'Sûres',
-      },
-      banned:{
-        en:'Banned',
-        fr:'Bannis',
-      },
-      availabe:{
-        en:'availabe',
-        fr:'disponibles',
-      },
-      none:{
-        en:'none',
-        fr:'aucun',
-      },
-      betteronlyone:{
-        en:'It is better to select only one of the two options, '
-          +'so the device knows if it must behave as a server or as a client.\n'
-          +'For optimal performances, your need to setup only one device as a server (the one that browses) '
-          +'and one or more clients (that advertise themself).',
-        fr:'Il est préférable de ne sélectionner  qu\'une seule des deux options '
-          +'pour que l\'appareil puisse déterminer s\'il doit se comporter en tant que serveur ou client.\n'
-          +'Pour une performance optimale, vous devez n\'avoir qu\'un seul serveur (l\'appareil qui effectue la recherche) '
-          +'et un ou plusieurs clients (les appareils qui se rendent visibles).'
-      },
-    }
-
-    return (msgs[str] && msgs[str][lang])
-    ? msgs[str][lang]
-    : str + ' ('+lang+')'
-    ;
-  }
-
-
   showStorages(userId) {
     this.sendMessage(userId, 'cmd', 'getStorages');
     this.setState({modalStorages:userId});
@@ -1601,14 +1669,19 @@ backgroundColor:'blue'
 
 
   showDevices(visible) {
+    clearTimeout(this.networkAnimationTimer);
     if(visible){
-      BluetoothCP.advertise("WIFI-BT");   // "WIFI", "BT", and "WIFI-BT"
-      BluetoothCP.browse('WIFI-BT');
-      this.setState({modalDevices:visible});
+      this.advertise();   // "WIFI", "BT", and "WIFI-BT"
+      this.browse();
+
+      this.setState({
+        //networkAnimation:new Animated.Value(0),
+        modalDevices:visible
+      });
     }
     else{
-      BluetoothCP.stopAdvertising();
-      BluetoothCP.stopBrowsing();
+      this.stopAdvertising();
+      this.stopBrowsing();
       this.setState({modalDevices:visible});
     }
   }
@@ -1638,101 +1711,45 @@ backgroundColor:'blue'
         visible={this.state.modalDevices!==false}
         onRequestClose={() => this.showDevices(false)}
         >
-        <View
-          style={{ backgroundColor:colors.lightBackGround,
-              alignItems:'center', justifyContent:'center', paddingTop:30, paddingBottom:30}}
-          >
-                {/*                
-                <MaterialCommunityIcons 
-                  name='access-point'
-                  size={35}
-                  color={'grey'}
-                  backgroundColor='transparent'
-                  style={{}}
-                />
-                */}
-                <Text style={{fontWeight:'normal', fontSize:26, color:'grey', marginBottom:30}}>
-                  {this._t('distantDevices')}
-                </Text>
-         
 
-                <TouchableOpacity 
-                  style={{ marginLeft:30,marginRight:30,marginBottom:20,
-                    flexDirection:'row',
-                    alignItems:'center',
-                    backgroundColor:'white', 
-                    borderColor:'lightgrey', borderWidth:1
-                  }} 
-                  onPress={()=>this.setStartUpParam('browseOnStart', !this.state.startup.browseOnStart)}
-                  >
-                  <MaterialCommunityIcons
-                    name= {this.state.startup.browseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
-                    style={{ 
-                      color: colors.greenFlash, padding:5,
-                      backgroundColor:'transparent',
-                    }}
-                    size={25}
-                  />
-                  <Text style={{padding:5, fontSize:14, 
-                    color:'grey', backgroundColor:'white',}}>
-                    Rechercher les appareils distants au démarage de l'application
-                    </Text>
-                </TouchableOpacity> 
-
-
-                <TouchableOpacity 
-                  style={{ marginLeft:30,marginRight:30,marginBottom:20,
-                    flexDirection:'row',
-                    alignItems:'center',
-                    backgroundColor:'white', 
-                    borderColor:'lightgrey', borderWidth:1
-                  }}
-                  onPress={()=>this.setStartUpParam('advertiseOnStart', !this.state.startup.advertiseOnStart)}
-                  >
-                  <MaterialCommunityIcons
-                    name= {this.state.startup.advertiseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
-                    style={{ 
-                      color: colors.greenFlash, padding:5,
-                      backgroundColor:'transparent',
-                    }}
-                    size={25}
-                  />
-                  <Text style={{padding:5, fontSize:14, 
-                    color:'grey', backgroundColor:'white',}}>
-                    Rendre cet appareil visible au démarage de l'application
-                  </Text>
-                </TouchableOpacity> 
-
-                { // Warn it is better to have one master & multiple clients.
-                  this.state.startup.browseOnStart && this.state.startup.advertiseOnStart
-                  ? <View
-                      style={{flexDirection:'row', marginLeft:20,marginRight:20,
-                        backgroundColor:'transparent'
-                      }}>
-                    <MaterialCommunityIcons
-                      name= "information-outline"
-                      style={{ 
-                        color: colors.greenFlash,
-                        backgroundColor:'transparent',
-                      }}
-                      size={20}
-                    >
-                      <Text style={{fontSize:14, color:'grey'}}>
-                        {'  ' + this._t('betteronlyone')}
-                      </Text>
-
-                    </MaterialCommunityIcons>
-                      </View>
-                  : null
-                }
-
-
-        </View>
         <SectionList
           style={{ flex:1}}
           sections={DATA}
           keyExtractor={(item, index) => item.id + index}
           renderItem={({ item }) => this.renderUser(item)}
+
+          ListHeaderComponent={
+            <View
+              style={{ backgroundColor:colors.lightBackGround,
+                  flexDirection:'row',
+                  alignItems:'center', justifyContent:'center',
+                   paddingTop:40, paddingBottom:30}}
+              >
+              <Text style={{fontWeight:'normal', fontSize:26, color:'grey',marginRight:10,}}>
+                {this._t('distantDevices')}
+              </Text>
+
+
+              <View style={{position:'relative',width:40,height:40, marginRight:10,  }}>
+                <MaterialCommunityIcons
+                  name='access-point' 
+                  size={40}
+                  color={'grey'}
+                  backgroundColor = 'transparent'
+                  style={{ position:'absolute' }}
+                />
+                <Animated.View style={{
+                  position:'absolute',
+                  borderRadius:40, 
+                  borderWidth: this.state.networkIconAnimValue,
+                  borderColor:colors.lightBackGround,  
+                  opacity:0.7,
+                  width:40,
+                  height:40}}
+                />
+              </View>  
+            </View>      
+          }
 
           renderSectionHeader={({ section: { title } }) => (
             <View
@@ -1752,7 +1769,9 @@ backgroundColor:'blue'
                   size={30}
                 />
               <Text style={{textTransform:'uppercase', fontWeight:'bold', fontSize:16, color:'white'}}>
-              {this._t(title)}</Text></View>
+                {this._t(title)}
+              </Text>
+            </View>
           )}
 
           renderSectionFooter={({ section: { data } }) => (
@@ -1762,6 +1781,124 @@ backgroundColor:'blue'
               style={{ backgroundColor:'transparent', height:50}}
               ></View>
           )}
+
+          ListFooterComponent={
+            <View
+              style={{ backgroundColor:colors.lightBackGround,
+                  alignItems:'center', justifyContent:'center', paddingTop:40, paddingBottom:20,
+                  paddingLeft:20, paddingRight:20,}}
+              >
+              <Text style={{fontWeight:'normal', fontSize:26, color:'grey', marginBottom:30}}>
+                {this._t('startupParameters')}
+              </Text>
+       
+              <TouchableOpacity 
+                style={{
+                  marginBottom:20,
+                  flexDirection:'row',
+                  alignItems:'center',
+                  backgroundColor:'white', 
+                  borderColor:'lightgrey', borderWidth:1, padding:1,
+                  alignSelf:'stretch',
+                  paddingRight:40
+                }} 
+                onPress={()=>this.setStartUpParam('browseOnStart', !this.state.startup.browseOnStart)}
+                >
+                <MaterialCommunityIcons
+                  name= {this.state.startup.browseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                  style={{ 
+                    color: colors.greenFlash, margin:5,
+                    backgroundColor:'transparent',
+                  
+                  }}
+                  size={25}
+                />
+                <Text style={{padding:5, fontSize:14, 
+                  color:'grey', backgroundColor:'white',}}>
+                  {this._t('browseOnStart')}
+                </Text>
+              </TouchableOpacity> 
+
+              <TouchableOpacity 
+                style={{
+                  marginBottom:20,
+                  flexDirection:'row',
+                  alignItems:'center',
+                  backgroundColor:'white', 
+                  borderColor:'lightgrey', borderWidth:1, padding:1,
+                  alignSelf:'stretch',
+                  paddingRight:40
+                }}
+                onPress={()=>this.setStartUpParam('advertiseOnStart', !this.state.startup.advertiseOnStart)}
+                >
+                <MaterialCommunityIcons
+                  name= {this.state.startup.advertiseOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                  style={{ 
+                    color: colors.greenFlash, margin:5,
+                    backgroundColor:'transparent',
+                  
+                  }}
+                  size={25}
+                />
+                <Text style={{padding:5, fontSize:14, 
+                  color:'grey', backgroundColor:'white',}}>
+                  {this._t('advertiseOnStart')}
+                </Text>
+              </TouchableOpacity> 
+
+              { // Warn it is better to have one master & multiple clients.
+                this.state.startup.browseOnStart && this.state.startup.advertiseOnStart
+                ? <View
+                    style={{flexDirection:'row',
+                      backgroundColor:'transparent', marginBottom:40,
+                    }}>
+                  <MaterialCommunityIcons
+                    name= "information-outline"
+                    style={{ 
+                      color: colors.greenFlash,
+                      backgroundColor:'transparent',
+                    }}
+                    size={20}
+                  >
+                    <Text style={{fontSize:14, color:'grey'}}>
+                      {'  ' + this._t('betteronlyone')}
+                    </Text>
+
+                  </MaterialCommunityIcons>
+                    </View>
+                : null
+              }
+
+              <TouchableOpacity 
+                style={{
+                  marginBottom:20,
+                  flexDirection:'row',
+                  alignItems:'center',
+                  backgroundColor:'white', 
+                  borderColor:'lightgrey', borderWidth:1, padding:1,
+                  alignSelf:'stretch',
+                  paddingRight:40
+                }}
+                onPress={()=>this.setStartUpParam('connectTrustedOnStart', !this.state.startup.connectTrustedOnStart)}
+                >
+                <MaterialCommunityIcons
+                  name= {this.state.startup.connectTrustedOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                  style={{ 
+                    color: colors.greenFlash, padding:5,
+                    backgroundColor:'transparent',
+                  }}
+                  size={25}
+                />
+                <Text style={{padding:5, fontSize:14, 
+                  color:'grey', backgroundColor:'white',}}>
+                  {this._t('connectTrustedOnStart')
+                }
+                </Text>
+              </TouchableOpacity> 
+
+            </View>
+          }
+        // end sectionList
         />
       </Modal>
     );
@@ -1932,6 +2069,96 @@ backgroundColor:'blue'
     });
   }
 
+
+  _t(str){
+    const lang = (Platform.OS === 'ios' ? 
+                NativeModules.SettingsManager.settings.AppleLocale:
+                NativeModules.I18nManager.localeIdentifier).substr(0,2),
+    msgs = {
+      free:{
+        en:'free',
+        fr:'libres',
+      },
+      distantDevices:{
+        en:'Distant devices',
+        fr:'Appareils distants',
+      },
+
+      safe:{
+        en:'Safe',
+        fr:'Sûres',
+      },
+      banned:{
+        en:'Banned',
+        fr:'Bannis',
+      },
+      availabe:{
+        en:'availabe',
+        fr:'disponibles',
+      },
+      none:{
+        en:'none',
+        fr:'aucun',
+      },
+
+      startupParameters:{
+        en:'On startup',
+        fr:'Au démarrage',
+      },
+      browseOnStart:{
+        en:'Browse for distant devices',
+        fr:'Rechercher les appareils distants',// au démarrage de l\'application',
+      },
+      advertiseOnStart:{
+        en:'Advertise this device.',
+        fr:'Rendre cet appareil visible',// au démarrage de l\'application',
+      },
+      connectTrustedOnStart:{
+        en:'Connect to trusted devices.',
+        fr:'Se connecter aux appareils sûres',
+      },
+      betteronlyone:{
+        en:'It is better to select only one of the two above options, '
+          +'so the device knows if it must behave as a server or as a client.\n\n'
+          +'For optimal performances, your need to setup only one device as a server (the one that browses) '
+          +'and one or more clients (that advertise themself).',
+        fr:'Il est préférable de ne sélectionner  qu\'une seule des deux options ci-dessus '
+          +'afin que l\'appareil puisse déterminer s\'il doit se comporter en tant que serveur ou en tant client.\n\n'
+          +'Pour une performance optimale, vous devez n\'avoir qu\'un seul serveur (l\'appareil qui effectue la recherche) '
+          +'et un ou plusieurs clients (les appareils qui se rendent visibles).'
+      },
+
+      gotInvitation:{
+        en:'Connection request',
+        fr:'Demande de connection',
+      },
+      gotInvitation_msg:{
+        en:'\nwants to connect.',
+        fr:'\ndemande à se connecter.',
+      },
+      connect:{
+        en:'Connect',
+        fr:'Connecter',
+      },
+      connectAndAddToFavorites:{
+        en:'Connect and add to favorites',
+        fr:'Connecter et ajouter aux favoris',
+      },
+      refuse:{
+        en:'Refuse',
+        fr:'Refuser',
+      },
+      refuseAndBan:{
+        en:'Refuse and ban',
+        fr:'Refuser et bannir',
+      },                        
+    }
+
+    return (msgs[str] && msgs[str][lang])
+    ? msgs[str][lang]
+    : str + ' ('+lang+')'
+    ;
+  }
 
 } // end of component
 

@@ -67,7 +67,6 @@ class Draggable extends Component { // Motion mask handles
 
     this.state = {
       pan: new Animated.ValueXY(),
-      opacity: new Animated.Value(1)
     };
 
     this.pictureRequested = false;
@@ -148,7 +147,7 @@ class Draggable extends Component { // Motion mask handles
 
 
 //----------------------------------------------------------------------------------------
-class MotionSetupButtons extends Component { // Motion mask handles
+export class MotionSetupButtons extends Component<Props> { // Motion mask handles
 //----------------------------------------------------------------------------------------    
   constructor(props) {
     super(props);
@@ -664,7 +663,7 @@ class MotionSetupButtons extends Component { // Motion mask handles
 
 
 //----------------------------------------------------------------------------------------
-class ActionButtons extends Component {
+export class ActionButtons extends Component<Props> {
 //----------------------------------------------------------------------------------------    
   constructor(props) {
     super(props);
@@ -695,57 +694,52 @@ class ActionButtons extends Component {
           onPress = {() => this.props.takePicture()}
         /></View>
 
-        { this.props.cam.indexOf('collection-') < 0
-          ?
-          <React.Fragment>
-          <View style={styles.iconButton}>
-          <MaterialCommunityIcons.Button   
-            name='video'
-            underlayColor={'white'}
-            size={40}
-            width={100}
-            margin={0}
-            paddingLeft={30}
-            color= { this.props.isRecording ? colors.purple : colors.greenFlash}
-            backgroundColor ={'transparent'}
+        <View style={styles.iconButton}>
+        <MaterialCommunityIcons.Button   
+          name='video'
+          underlayColor={'white'}
+          size={40}
+          width={100}
+          margin={0}
+          paddingLeft={30}
+          color= { this.props.isRecording ? colors.purple : colors.greenFlash}
+          backgroundColor ={'transparent'}
 
-            onPress={
-              this.props.isRecording 
-              ? () => {
-                  this.stopRecordRequested = true;
-                  this.props.stopRecording();
-                }
-              : () => this.props.takeVideo()
-            }
-          /></View>
-
-          <View style={styles.iconButton}>
-          <MaterialCommunityIcons.Button   
-            name='cctv'
-            underlayColor={'white'}
-            size={40}
-            width={100}
-            margin={0}
-            paddingLeft={30}
-            paddingBottom={12}
-            color= {this.props.motionDetectionMode==MODE_RUN ? colors.purple : colors.greenFlash }
-            backgroundColor ={'transparent'}
-            onPress = {() => this.props.onMotionButton()}
-          /></View>
-           
-          { this.props.motionsCount
-            ? <Text style={{
-                marginTop:-40, marginLeft:-30, textAlign:'center',
-                height:20,width:20, backgroundColor:colors.purple, borderRadius:20,
-                color:'white', fontSize:12, fontWeight:'bold',
-                }}>
-                {this.props.motionsCount}</Text>
-            : null
+          onPress={
+            this.props.isRecording 
+            ? () => {
+                this.stopRecordRequested = true;
+                this.props.stopRecording();
+              }
+            : () => this.props.takeVideo()
           }
-              
-          </React.Fragment>
-          :null
+        /></View>
+
+        <View style={styles.iconButton}>
+        <MaterialCommunityIcons.Button   
+          name='cctv'
+          underlayColor={'white'}
+          size={40}
+          width={100}
+          margin={0}
+          paddingLeft={30}
+          paddingBottom={12}
+          color= {this.props.motionDetectionMode==MODE_RUN ? colors.purple : colors.greenFlash }
+          backgroundColor ={'transparent'}
+          onPress = {() => this.props.onMotionButton()}
+        /></View>
+         
+        { this.props.motionsCount
+          ? <Text style={{
+              marginTop:-40, marginLeft:-30, textAlign:'center',
+              height:20,width:20, backgroundColor:colors.purple, borderRadius:20,
+              color:'white', fontSize:12, fontWeight:'bold',
+              }}>
+              {this.props.motionsCount}</Text>
+          : null
         }
+            
+
       </View>
     );
     
@@ -753,7 +747,8 @@ class ActionButtons extends Component {
 }
 
 
-
+// TODO stop motion detecting before recording video
+// or it crashes
 
 
 
@@ -1108,7 +1103,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
           // deviceOrientation: (number) orientation of the device
           // isRecordingInterrupted: (boolean) whether the app has been minimized while recording
 
-          if(this.props.recording){
+          if(this.props.recording!==undefined){
             this.props.recording(true);
           }
           this.setState({ isRecording: true });
@@ -1117,6 +1112,7 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
           //console.log('video promise',data)
 
           // Store video thumb.
+           // checking via onRecordingStart if a video has been recorded fails as well.
           NativeModules.RNioPan.getVideoThumb(filename)
           .then((result) => {
             // path", "file://" + fullPath + '/' + fileName);
@@ -1498,7 +1494,6 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
             /> 
           : <ActionButtons
               ref="ActionButtons"
-              cam={this.state.cam}
               isRecording={this.state.isRecording}
               isTakingPicture={this.state.isTakingPicture}
               motionDetectionMode={this.state.motionDetectionMode}
