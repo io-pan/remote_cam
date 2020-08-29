@@ -267,19 +267,6 @@ export default class App extends Component<Props> {
 
 
 
-      // TODO.
-      this.firebaseauth  = firebaseauth();//
-        // console.log('FireBaseAuth user',this.firebaseauth);
-          /*
-          {
-            "rules": {
-              ".read":  "auth != null",
-              ".write": "auth != null"
-            }
-          }
-          */
-
-
        // AsyncStorage.removeItem('bannedUsers')
        // AsyncStorage.removeItem('trustedUsers')
        // AsyncStorage.removeItem('storedUsers') 
@@ -359,77 +346,79 @@ export default class App extends Component<Props> {
               });
             }
 
-            // Add item for me on firebase.
-            // database()
-            // .ref('/' + this.deviceId)
-            // .once("value", (snapshot)=>{
-          
-            //   if(snapshot!==null){
-                database()
-                .ref('/' + this.deviceId)
-                .set({  name:this.deviceName, invitations:false, messages:false,})
-                .then(() => {
+            // Firebase init.
+            this.firebaseauth = firebaseauth()
+            .signInAnonymously()
+            .then((user) => {
+              console.log('User signed in anonymously',user);
+              // s9 CWsf5lmVbqaC6SkpRyvLCQbcbqm2
+              // s7 eZ9zEOk4oXOWbcGdhatycf4aaan1
 
-                  // Listen to pings.
-                  this.fbInvitationListner = database()
-                  .ref('/' + this.deviceId + '/areyourrellyonline' )
-                  .on('value', snapshot => { 
+              this.firebaseId = user.uid;
+              // Add item for me on firebase.
+              // database()
+              // .ref('/' + this.deviceId)
+              // .once("value", (snapshot)=>{
+            
+              //   if(snapshot!==null){
+              database()
+              .ref('/' + this.deviceId)
+              .set({  name:this.deviceName, invitations:false, messages:false,})
+              .then(() => {
 
-                    // this.fbInvitationListner = database()
-                    // .ref('/' + this.deviceId + '/areyourrellyonline' )
-                    // .off();
-                    if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
-                      database()
-                      .ref('/' + this.deviceId + '/areyourrellyonline' )
-                      .set('yes_' + new Date());
-                    }
-                  });
+                // Listen to pings.
+                this.fbInvitationListner = database()
+                .ref('/' + this.deviceId + '/areyourrellyonline' )
+                .on('value', snapshot => { 
 
-                  // Listen to peerlost.
-                  database()
-                  .ref('/')
-                  .on('child_removed', snapshot => {
-                    this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
-                  });
-
-                  // Listen to invitations.
-                  this.fbInvitationListner = database()
-                  .ref('/' + this.deviceId + '/invitations' )
-                  .on('child_added', snapshot => { 
-
-                    this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
-                  });
-
-                  // Listen to messages. TODO ?.. would be better to wait for connection.
-                  this.firebaseListner = database()
-                  .ref('/' + this.deviceId + '/messages')
-                  .on('child_changed', snapshot => { 
-
-                    console.log('Firebase message from ' + snapshot.key, snapshot.val() );
-                    this.receivedMessage({
-                      id: snapshot.key,
-                      message:snapshot.val(),
-                    }, true);
-                  });
-
-                  // once connected
-                  // // Listen for messages .
-                  // this.firebaseListner = database()
-                  // .ref('/' + this.deviceId )
-                  // .on('child_added', snapshot => { 
-
-                  //   console.log('fairebase message:', snapshot.val() );
-                  //   this.receivedMessage({
-                  //     id: snapshot.val().from,
-                  //     message:{
-                  //       key:snapshot.val().key,
-                  //       value:snapshot.val().value,
-                  //     }}, 
-                  //     snapshot.key);
-                  // });
+                  // this.fbInvitationListner = database()
+                  // .ref('/' + this.deviceId + '/areyourrellyonline' )
+                  // .off();
+                  if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
+                    database()
+                    .ref('/' + this.deviceId + '/areyourrellyonline' )
+                    .set('yes_' + new Date());
+                  }
                 });
-         //     }
-         //   });
+
+                // Listen to peerlost.
+                database()
+                .ref('/')
+                .on('child_removed', snapshot => {
+                  this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
+                });
+
+                // Listen to invitations.
+                this.fbInvitationListner = database()
+                .ref('/' + this.deviceId + '/invitations' )
+                .on('child_added', snapshot => { // TODO child add / change ....
+                  this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
+                });
+
+                // Listen to messages. TODO ?.. would be better to wait for connection.
+                this.firebaseListner = database()
+                .ref('/' + this.deviceId + '/messages')
+                .on('child_changed', snapshot => { 
+
+                  console.log('Firebase message from ' + snapshot.key, snapshot.val() );
+                  this.receivedMessage({
+                    id: snapshot.key,
+                    message:snapshot.val(),
+                  }, true);
+                });
+
+              });
+       //     }
+       //   });
+
+
+            })
+            .catch(error => {
+              if (error.code === 'auth/operation-not-allowed') {
+                console.log('Enable anonymous in your firebase console.');
+              }
+              console.error(error);
+            });
 
           }); // Get startUp params.
 
@@ -582,6 +571,8 @@ export default class App extends Component<Props> {
 
   browse(){
     if(!this.browsing){
+      console.log('browsing');
+
       this.browsing = true;
       BluetoothCP.browse('WIFI-BT');
       if(!this.advertising){
@@ -596,7 +587,7 @@ export default class App extends Component<Props> {
       .once('value', devices => {
         devices.forEach((device)=>{
   
-
+          console.log('firebase device' )
           if(device.key!=this.deviceId && device.val().name){
 
             console.log(this.deviceId+'browsing ' , device.key)
@@ -682,13 +673,17 @@ export default class App extends Component<Props> {
     console.log('PeerDetected',user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
-    const storedUsers = [...this.state.storedUsers];
+    const storedUsers = Object.assign([], this.state.storedUsers);
+    console.log('storedUsers 0', this.state.storedUsers);
+    //[...this.state.storedUsers];
 
     if(undefined===storedUsers.find(u => u.id === user.id)){
       // insert it
+      console.log(' insert it');
       storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
     }
     else{ 
+      console.log(' update with connected info');
       // update with connected info.
       const index = storedUsers.findIndex(u => u.id === user.id);
       storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
@@ -703,6 +698,11 @@ export default class App extends Component<Props> {
       }
     }
 
+    // Create db item for it
+    database().ref('/' + this.deviceId + '/invitations/' + user.id).set(false).then(() => {
+
+    });
+
     // Stop browsing/advertising if all trusted users are nearby.
     const allhere = storedUsers.findIndex(u => (u.trusted==1 && !u.nearby)) < 0;
     if(allhere){
@@ -711,9 +711,7 @@ export default class App extends Component<Props> {
       // this.stopBrowsing();
     }
 
-    this.setState({
-      storedUser:storedUsers,
-    });
+    this.setState({storedUsers:storedUsers});
   }
 
   PeerLost = (lostUser) => {
@@ -736,12 +734,11 @@ export default class App extends Component<Props> {
         if(stillNearby){
           console.log('still nearby');
           storedUsers[index].connected = lostUser.connected;
-          }
         }
         else {
           console.log('really lost');
           // If trusted or banned, keep it in list.
-          if(storedUsers[index].trusted!=0){
+          if(storedUsers[index].trusted==1 || storedUsers[index].trusted==-1){
             delete storedUsers[index].nearby;
 
             // if trusted research it.
@@ -923,9 +920,12 @@ export default class App extends Component<Props> {
         .on('value', snapshot => {
 
           if(snapshot.val() != this.deviceName ){
+            // Delete invitation
             database()
             .ref('/' + user.id + '/invitations/' + this.deviceId )
-            .off()
+            .off();
+
+            database().ref('/' + user.id + '/invitations/' + this.deviceId ).remove();
 
             if(snapshot.val() == 'accepted'){
               //console.log('invitation response from' + user.id+ ' ' + snapshot.key ,snapshot.val() );
@@ -1650,6 +1650,7 @@ export default class App extends Component<Props> {
                     ? 1
                     : 0.2
                   }
+                        // TODO: show detail
                   onPress = { value.user.id=='local' 
                     ? null
                     : value.user.connected
