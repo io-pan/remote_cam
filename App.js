@@ -9,7 +9,7 @@ TODO:
   . current session per device
 . Devices tabs + prview all
 . Distant motion
-
+. real video stream
 */
 
 import React, {Component} from 'react';
@@ -355,6 +355,7 @@ export default class App extends Component<Props> {
               // s7 eZ9zEOk4oXOWbcGdhatycf4aaan1
 
               this.firebaseId = user.uid;
+
               // Add item for me on firebase.
               // database()
               // .ref('/' + this.deviceId)
@@ -367,7 +368,7 @@ export default class App extends Component<Props> {
               .then(() => {
 
                 // Listen to pings.
-                this.fbInvitationListner = database()
+                database()
                 .ref('/' + this.deviceId + '/areyourrellyonline' )
                 .on('value', snapshot => { 
 
@@ -461,8 +462,8 @@ export default class App extends Component<Props> {
 
     this.state.devices.forEach(function(item, index){
       if (item.connected && item.user.id != 'local'){
-        this.disconnectFromPeer(item.id);
-        console.log('disconnectFromPeer',item.id );
+        this.disconnectFromPeer(item);
+        console.log('disconnectFromPeer',item );
       }
     });
 
@@ -660,12 +661,40 @@ export default class App extends Component<Props> {
     .off('child_added');
   }
 
-  disconnectFromPeer(id){
-    BluetoothCP.disconnectFromPeer(id);
+  disconnectFromPeer(user){
+    BluetoothCP.disconnectFromPeer(user.id);
 
     // If ony connected via firebase delete dedicated messages item.
-    database().ref('/' + this.deviceId + '/messages/' .id).remove().then(() => {
-      this.PeerLost({id:id, connected:false});
+    database().ref('/' + this.deviceId + '/messages/' + user.id).remove().then(() => {
+      this.PeerLost({id:user.id, connected:false});
+      this.sendMessage( user.id, 'disconnect', Date.now());
+
+      // Ping to know if realy online.
+      database()
+      .ref('/' + user.id + '/areyourrellyonline/' )
+      .set('ping_' + this.deviceId)
+      .then(() => {
+
+        // Listen to ping response.
+        database()
+        .ref('/' + user.id + '/areyourrellyonline/' )
+        .on('value', snapshot => {
+
+          if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
+
+            database()
+            .ref('/'+snapshot.key + '/areyourrellyonline/' )
+            .off('value');
+
+            this.PeerDetected({
+              connected: false, 
+              id: user.id, 
+              name: user.name,
+            }, true);     
+          }
+
+        });// Ping response
+      }); // set ping
     });
   }
 
@@ -698,11 +727,6 @@ export default class App extends Component<Props> {
       }
     }
 
-    // Create db item for it
-    database().ref('/' + this.deviceId + '/invitations/' + user.id).set(false).then(() => {
-
-    });
-
     // Stop browsing/advertising if all trusted users are nearby.
     const allhere = storedUsers.findIndex(u => (u.trusted==1 && !u.nearby)) < 0;
     if(allhere){
@@ -716,6 +740,9 @@ export default class App extends Component<Props> {
 
   PeerLost = (lostUser) => {
     console.log('PeerLost',lostUser);
+
+    // delete db item for it
+    database().ref('/' + this.deviceId + '/messages/' + lostUser.id).remove().then(() => {});
 
     // Check if it is only a logout or a real lost.
     BluetoothCP.getNearbyPeers((nearbyUsers)=>{
@@ -736,7 +763,7 @@ export default class App extends Component<Props> {
           storedUsers[index].connected = lostUser.connected;
         }
         else {
-          console.log('really lost');
+          console.log('really lost',storedUsers[index].trusted);
           // If trusted or banned, keep it in list.
           if(storedUsers[index].trusted==1 || storedUsers[index].trusted==-1){
             delete storedUsers[index].nearby;
@@ -779,33 +806,25 @@ export default class App extends Component<Props> {
     // Create db item for it
     database().ref('/' + this.deviceId + '/messages/' + user.id).set('false').then(() => {
 
-    });
+      // Check if not already present in list
+      if(this.getDeviceIndex(user.id)===false){
+        devices.push({...shareState, user:user});
+      }
+
+      const index = storedUsers.findIndex(o => o.id === user.id);
+      console.log('index',index)
+      if(index>-1){
+        storedUsers[index].connected = true;//user.connected;
+      }
 
 
-    // Check if not already present in list
-    if(this.getDeviceIndex(user.id)===false){
-      devices.push({...shareState, user:user});
-    }
-
-    const index = storedUsers.findIndex(o => o.id === user.id);
-    console.log('index',index)
-    storedUsers[index].connected = true;//user.connected;
-
-    this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
-      // Launch cam automatically.
-      // if(!this.isMaster){
-      //   if(!this.state.devices[0].distantCam){
-      //     this.toggleCam();
-      //   }
-      //   else{
-      //     // TODO send cam preview dimensions.
-      //   }
-      // }
-      //else{
-        // Tell others about me.
+      this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
+        // Tell  about me.
         this.sendMessage( user.id, 'fullShareSate', devices[0]);
-      //}
+      });
     });
+
+
 
 
 
@@ -895,10 +914,10 @@ export default class App extends Component<Props> {
             }
             
           },
-          // {
-          //   text: this._t('refuseAndBan'), 
-          //   onPress: () =>  this.storeUserStatus(user,-1)
-          // },
+          {
+            text: this._t('refuseAndBan'), 
+            onPress: () =>  this.storeUserStatus(user,-1)
+          },
         ],
       );
     }
@@ -931,6 +950,9 @@ export default class App extends Component<Props> {
               //console.log('invitation response from' + user.id+ ' ' + snapshot.key ,snapshot.val() );
               this.Connected({id:user.id, name:user.name , connected:true}, true);
             }
+            else {//if(snapshot.val() == 'refused'){
+              Alert.alert(this._t('connectionRejected'));
+            }
           }
         });
       });
@@ -944,7 +966,7 @@ export default class App extends Component<Props> {
   sendMessage(userId, key, value){
     console.log('sendMessage to ', userId);
     console.log('key',key,);
-    console.log('value', value);
+    // console.log('value', value);
 
     if(!userId) {
       return;
@@ -974,37 +996,18 @@ export default class App extends Component<Props> {
 
   
     const devices = [...this.state.devices];
-    if( key=='cmd'){
-      // if(value=='distantCam' && this.state.distantCam) {
-                
-      //   devices[this.getDeviceIndex(userId)] = {
-      //     ...this.getDevice(userId),
-      //     distantCam:false,
-      //     distantRec:false,
-      //     distantTakingPhoto:false,
-      //     distantSnaping:false,
-      //     previewing:false,
-      //   }
-
-      //   this.setState({ devices:devices });
-
-      // }
-
-      // else 
-
-      if(value=='takeSnap') {
-        devices[this.getDeviceIndex(userId)].distantSnaping = true;
-        this.setState({devices:devices});
-      }
-      else if(value=='takePicture') {
-        devices[this.getDeviceIndex(userId)].distantTakingPhoto = true;
-        this.setState({devices:devices});
-      }
-
+    if(key=='takeSnap') {
+      devices[this.getDeviceIndex(userId)].distantSnaping = true;
+      this.setState({devices:devices});
+    }
+    else if(key=='takePicture') {
+      devices[this.getDeviceIndex(userId)].distantTakingPhoto = true;
+      this.setState({devices:devices});
     }
   }
 
   receivedMessage(user, firebase) {
+    console.log('receivedMessage from ' ,user.id );
 
     if(this.getDeviceIndex(user.id) === false) {
       return false;
@@ -1012,58 +1015,64 @@ export default class App extends Component<Props> {
 
     const devices = Object.assign([], this.state.devices),//[...this.state.devices],
           msg = firebase ? user.message : JSON.parse(user.message);
+
+    console.log('key',msg.key);
     // console.log('receivedMessage',msg);
     if(msg.key == 'txt') {
-      Alert.alert(msg.value);
+      console.log('value', msg.value);
     }
 
-    // Received order.
+    //
+    // Orders.
+    //
     else if(msg.key == 'cmd') {
 
-      if(msg.value == 'distantCam') {
-        this.toggleCam();
-      } 
-      
-      else if(msg.value=='toggleMask'){
-        this.toggleMask();
-      }
-
-      else if(msg.value=='getStorages'){
-        this.getAvailableStorages();
-      }
-
-      else if(msg.value=='takePicture'){
-        this.refs.cam.pictureRequested = user.id;
-        this.refs.cam.takePicture();
-      }
-
-      else if(msg.value=='takeSnap'){
-        //this.refs.viewShot.capture().then(uri => {
-        this.refs.cam.refs.viewShotCam.capture().then(uri => {
-          this.sendMessage(user.id, 'snap', uri);
-        });
-      }
-
-      else if(msg.value=='viewShot' && this.refs.viewShot){
-        // this.refs.viewShot.capture().then(uri => {
-        this.refs.cam.refs.viewShotCam.capture().then(uri => {
-          this.sendMessage(user.id, 'viewShot', uri);
-        });
-      }
-
-      else if(msg.value=='startRecording'){
+      if(msg.value=='startRecording'){
         this.refs.cam.videoRequested = user.id;
         // this.refs.cam.stopRecordRequested = false;
         this.refs.cam.refs.ActionButtons.stopRecordRequested = false;
-
         this.refs.cam.takeVideo();
       }
       else if(msg.value=='stopRecording'){
         // this.refs.cam.stopRecordRequested = true;
         this.refs.cam.refs.ActionButtons.stopRecordRequested = true;
-
         this.refs.cam.camera.stopRecording();
       }
+    }
+
+    if(msg.key=='getStorages'){
+      this.getAvailableStorages();
+    }
+
+    else if(msg.key=='toggleCam'){
+      this.toggleCam();
+    }
+
+    else if(msg.key=='toggleMask'){
+      this.toggleMask();
+    }
+
+    else if(msg.key=='takeSnap' && this.refs.cam.refs.viewShotCam){
+      //this.refs.viewShot.capture().then(uri => {
+      this.refs.cam.refs.viewShotCam.capture().then(uri => {
+        this.sendMessage(user.id, 'snap', uri);
+      });
+    }
+
+    else if(msg.key == 'viewShot' && this.refs.cam.refs.viewShotCam){
+      // this.refs.viewShot.capture().then(uri => {
+      this.refs.cam.refs.viewShotCam.capture().then(uri => {
+        this.sendMessage(user.id, 'viewShot', uri);
+      });
+    }
+
+    else if(msg.key=='takePicture'){
+      this.refs.cam.pictureRequested = user.id;
+      this.refs.cam.takePicture();
+    }
+
+    else if(msg.key=='disconnect'){
+      this.PeerLost({id:user.id, connected:false});
     }
 
     else if( msg.key == 'setStorage' ) { 
@@ -1096,7 +1105,8 @@ export default class App extends Component<Props> {
       this.setState({devices:devices}, function(){
         // Preview automatically as soon as cam is on.
         if( msg.key == 'distantCam'){
-          this.sendMessage(user.id, 'cmd', 'viewShot');
+
+          this.sendMessage(user.id, 'viewShot', Date.now());
         }
       });
     }
@@ -1166,7 +1176,7 @@ export default class App extends Component<Props> {
     }
 
     // Preview image.
-    else if(msg.key == 'viewShot') { 
+    else if(msg.key== 'viewShot') { 
       if(devices[this.getDeviceIndex(user.id)].distantPreviewCurrent==0){
         devices[this.getDeviceIndex(user.id)].distantPreview0 = 'data:image/jpeg;base64,'+msg.value;
         devices[this.getDeviceIndex(user.id)].distantPreviewCurrent = 1; 
@@ -1176,6 +1186,9 @@ export default class App extends Component<Props> {
         devices[this.getDeviceIndex(user.id)].distantPreviewCurrent = 0; 
       }
       this.setState({devices:devices});
+    }
+    else{
+
     }
   }
 
@@ -1201,7 +1214,7 @@ export default class App extends Component<Props> {
           onPress={  
             device.user.id == 'local'
             ? () => this.toggleCam()
-            : () => this.sendMessage(device.user.id, 'cmd', 'distantCam') 
+            : () => this.sendMessage(device.user.id, 'toggleCam', device.distantCam) 
           }
           underlayColor={colors.greenSuperLight}
         ><MaterialCommunityIcons 
@@ -1216,7 +1229,7 @@ export default class App extends Component<Props> {
           onPress = {
             device.user.id == 'local'
             ? () => this.toggleMask()
-            : () => this.sendMessage(device.user.id, 'cmd', 'toggleMask')
+            : () => this.sendMessage(device.user.id, 'toggleMask', !device.distantMask)
           }
           underlayColor={colors.greenSuperLight}
         ><MaterialCommunityIcons 
@@ -1381,7 +1394,7 @@ export default class App extends Component<Props> {
                 }}
                 resizeMode={FastImage.resizeMode.contain}
                 // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-                onLoad={e => this.sendMessage(device.user.id, 'cmd', 'viewShot')}
+                onLoad={e => this.sendMessage(device.user.id, 'viewShot', Date.now())}
               />
           }
           {!device.distantPreview1
@@ -1403,7 +1416,7 @@ export default class App extends Component<Props> {
                     priority: FastImage.priority.high ,
                 }}
                 resizeMode={FastImage.resizeMode.contain}
-                onLoad={e => this.sendMessage(device.user.id, 'cmd', 'viewShot')}
+                onLoad={e => this.sendMessage(device.user.id, 'viewShot', Date.now())}
               />
           }
         </View>
@@ -1421,8 +1434,8 @@ export default class App extends Component<Props> {
           motionsCount={0}
 
           takePicture={ device.distantRec
-            ? () => this.sendMessage(device.user.id, 'cmd', 'takeSnap')
-            : () => this.sendMessage(device.user.id, 'cmd', 'takePicture')
+            ? () => this.sendMessage(device.user.id, 'takeSnap', Date.now())
+            : () => this.sendMessage(device.user.id, 'takePicture', Date.now())
           }
 
           takeVideo={() => this.sendMessage(device.user.id, 'cmd', 'startRecording')}
@@ -1513,7 +1526,7 @@ export default class App extends Component<Props> {
     devices[deviceIndex].previewing = !devices[deviceIndex].previewing;
     this.setState({devices:devices}, function(){
       if (devices[deviceIndex].previewing){
-        this.sendMessage(userId, 'cmd', 'viewShot');
+        this.sendMessage(userId, 'viewShot', Date.now());
       }
     });
   }
@@ -1654,7 +1667,7 @@ export default class App extends Component<Props> {
                   onPress = { value.user.id=='local' 
                     ? null
                     : value.user.connected
-                      ? () => this.disconnectFromPeer(value.user.id)
+                      ? () => this.disconnectFromPeer(value.user)
                       : () => this.sendInvitation(value.user)
                   }
                   >
@@ -1812,21 +1825,22 @@ export default class App extends Component<Props> {
     if(bat.charging){
       name += '-charging';
     }
-    const levelRound = Math.round(bat.level / 10) * 10;
-    if(levelRound == 0){
-      name += '-outline';
-    }
     else{
-      name += '-'+levelRound;
-    }
-    if(name=='battery-100'){
-      name = 'battery';
+      const levelRound = Math.round(bat.level / 10) * 10;
+      if(levelRound == 100){
+      }
+      else if(levelRound == 0){
+        name += '-outline';
+      }
+      else{
+        name += '-'+levelRound;
+      }
     }
     return name;
   }
 
   showStorages(userId) {
-    this.sendMessage(userId, 'cmd', 'getStorages');
+    this.sendMessage(userId, 'getStorages', Date.now());
     this.setState({modalStorages:userId});
   }
   renderModalStorages(){
@@ -2174,11 +2188,11 @@ export default class App extends Component<Props> {
             flexDirection:'row', 
             flex:1, 
           }}
-          onPress = { user.nearby
-            ? user.connected
-              ? () => this.disconnectFromPeer(user.id)
+          onPress = { !user.nearby || user.trusted == -1
+            ? null
+            :  user.connected
+              ? () => this.disconnectFromPeer(user)
               : () => this.sendInvitation(user)
-            : null
           }
           >
           <MaterialCommunityIcons
@@ -2258,7 +2272,10 @@ export default class App extends Component<Props> {
         { user.nearby 
           ? <TouchableOpacity 
               // ban button
-              onPress = {() => this.storeUserStatus(user,-1)} 
+              onPress = {() => {
+                this.storeUserStatus(user,-1);
+                this.disconnectFromPeer(user);
+              }}
               >
               <MaterialCommunityIcons
                 name={ "cancel" }
@@ -2397,7 +2414,13 @@ export default class App extends Component<Props> {
       refuseAndBan:{
         en:'Refuse and ban',
         fr:'Refuser et bannir',
-      },                        
+      },
+      connectionRejected:{
+        en:'Connection rejected',
+        fr:'Connection refusée',
+      },
+
+       
     }
 
     return (msgs[str] && msgs[str][lang])
