@@ -143,6 +143,7 @@ export default class App extends Component<Props> {
 
     this.deviceId = null;
     this.deviceName = null;
+    this.listeners=null;
   }
 
   networkAnimation() {
@@ -235,112 +236,40 @@ export default class App extends Component<Props> {
     StatusBar.setHidden(true);
     SplashScreen.hide();
 
-    // this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-    //     Alert.alert(
-    //       "Quiter l'application ?",
-    //       "",
-    //       [{
-    //         text: 'Annuler',
-    //         // onPress: () => {return false},
-    //       },{
-    //         text: 'Quitter', 
-    //         onPress: () =>{RNExitApp.exitApp()},
-    //       }]
-    //     );
-    //     return true;
-    // });
-
-
-    this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected)
-    this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost)
-    this.listener3 = BluetoothCP.addReceivedMessageListener(this.receivedMessage)
-    this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation)
-    this.listener5 = BluetoothCP.addConnectedListener(this.Connected)
-
-     // AsyncStorage.removeItem('bannedUsers')
-     // AsyncStorage.removeItem('trustedUsers')
-     // AsyncStorage.removeItem('storedUsers') 
-     // return;
-
-    // Get stored devices.
-    AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
-     
-      if (err || storedUsers===null) {
-        AsyncStorage.setItem('storedUsers', JSON.stringify([]));
-        storedUsers=[];
-      }
-      else {
-        storedUsers = JSON.parse(storedUsers);
-      }
-      console.log('get storedUsers',storedUsers);
-
-      // Get already present devices (happend in dev when refreshing app).
-      const devices = this.state.devices;
-
-
-      BluetoothCP.getNearbyPeers((users)=>{
-        console.log('did mount getNearbyPeers',users);
-        users.forEach((user,index)=>{
-
-            if(this.getDeviceIndex(users.id) === false    // device not  already in state
-            // && this.bannedUsersIds.indexOf(user.id) < 0
-            ){ // device not banned
-              devices.push({...shareState,  user:user});
-            }
-
-          const storedUser = storedUsers.find(u => u.id === user.id);
-          // index = a.findIndex(x => x.prop2 ==="yutu");
-          if(storedUser===undefined){ // insert it
-            storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
-            //devices.push({...shareState,  user:user});; 
-          }
-          else{ // update with connected info.
-            const index = storedUsers.findIndex(u => u.id === user.id);
-            storedUsers[index].connected = user.connected;
-            storedUsers[index].name = user.name;
-            storedUsers[index].nearby = true;
-          }
-        })
-
-        this.setState({storedUsers:storedUsers, function(){
-             console.log('didmount storedUsers:',storedUsers );
-        }});
+    NativeModules.RNioPan.getDeviceId((deviceId)=>{
+      this.deviceId = deviceId.substr(0,16);
+      this.deviceName = deviceId.substr(16);
+      this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+          Alert.alert(
+            "Quiter l'application ?",
+            "",
+            [{
+              text: 'Annuler',
+              // onPress: () => {return false},
+            },{
+              text: 'Quitter', 
+              onPress: () =>{
+                //RNExitApp.exitApp()
+                BackHandler.exitApp();
+              },
+            }]
+          );
+          return true;
       });
-       
 
-      this.setState({storedUsers:storedUsers}, function(){
-        // TODO ? should set up listener here
-      });
-    });
+      this.listeners = [
+        this.listener1 = BluetoothCP.addPeerDetectedListener(this.PeerDetected),
+        this.listener2 = BluetoothCP.addPeerLostListener(this.PeerLost),
+        this.listener3 = BluetoothCP.addReceivedMessageListener((msg)=>this.receivedMessage(msg,false)),
+        this.listener4 = BluetoothCP.addInviteListener(this.gotInvitation),
+        this.listener5 = BluetoothCP.addConnectedListener(this.Connected),
+      ]
 
- 
-    // Get startUp params.
-    AsyncStorage.getItem('startup', (err, startup) => {
-      console.log('get startup params',startup);
 
-      if (err || startup===null) {
-        startup = this.state.startup;
-        AsyncStorage.setItem('startup', JSON.stringify(startup));
-      }
-      else {
-        startup = JSON.parse(startup);
-        this.setState({startup:startup}, function(){
-              console.log('get startup params state',this.state.startup);
-          if(this.state.startup.browseOnStart){
-            this.browse();  // "WIFI", "BT", and "WIFI-BT"
-            this.networkAnimationTimer = setTimeout( ()=>{this.stopBrowsing()}, 30*1000);
-          }
-          if(this.state.startup.advertiseOnStart){
-            this.advertise();
-            this.networkAnimationTimer = setTimeout( ()=>{this.stopAdvertising()}, 30*1000);
-          }
-        });
-      }
-    });
 
-    this.getAvailableStorages();
-    this.getBatteryInfo();
-
+      // TODO.
+      this.firebaseauth  = firebaseauth();//
+        // console.log('FireBaseAuth user',this.firebaseauth);
           /*
           {
             "rules": {
@@ -350,89 +279,232 @@ export default class App extends Component<Props> {
           }
           */
 
-          // TODO.
-          this.firebaseauth  = firebaseauth();//
-            // console.log('FireBaseAuth user',this.firebaseauth);
 
-          const reference = database().ref('/ 7ea7b6331ab5c39e');
-           //  console.log('FireBaseAuth data',reference);
+       // AsyncStorage.removeItem('bannedUsers')
+       // AsyncStorage.removeItem('trustedUsers')
+       // AsyncStorage.removeItem('storedUsers') 
+       // return;
 
-    // Create firebase item
-    // so other can know I am online and send me messages.
-    NativeModules.RNioPan.getDeviceId((deviceId)=>{
-      this.deviceId = deviceId.substr(0,16);
-      this.deviceName = deviceId.substr(16);
+      // Get stored devices.
+      AsyncStorage.getItem('storedUsers', (err, storedUsers) => {
+       
+        if (err || storedUsers===null) {
+          AsyncStorage.setItem('storedUsers', JSON.stringify([]));
+          storedUsers=[];
+        }
+        else {
+          storedUsers = JSON.parse(storedUsers);
+        }
+        console.log('get storedUsers',storedUsers);
 
-      database()
-      .ref('/' + this.deviceId)
-      .set({
-        name: this.deviceName,
-        messages: [/*
-          {
-            from:'debb6d214c52a5a9',  // ioS9
-            key:'cmd',
-            value:'distantCam',
-          },{
-            from:'7ea7b6331ab5c39e',  // ioS7
-            key:'cmd',
-            value:'takePicture',
-          }
-        */],
-      })
-      .then(() => {
-        // Listen for messages from firebase.
-        database()
-        .ref('/' + this.deviceId + '/messages')
+        // Get already present devices 
+        // (happend in dev when refreshing app).
+        const devices = [...this.state.devices];
 
-        // TODO create child  instead ? 
-        .on('value', snapshot => { 
-          console.log('User data: ', snapshot.val());
+        BluetoothCP.getNearbyPeers((users)=>{
+          console.log('did mount getNearbyPeers',users);
+          users.forEach((user,index)=>{
+
+              if(this.getDeviceIndex(users.id) === false    // device not  already in state
+              // && this.bannedUsersIds.indexOf(user.id) < 0
+              ){ // device not banned
+                devices.push({...shareState,  user:user});
+              }
+
+            const storedUser = storedUsers.find(u => u.id === user.id);
+            // index = a.findIndex(x => x.prop2 ==="yutu");
+            if(storedUser===undefined){ // insert it
+              storedUsers.push({id:user.id, name:user.name, nearby:true,}); 
+              //devices.push({...shareState,  user:user});; 
+            }
+            else{ // update with connected info.
+              const index = storedUsers.findIndex(u => u.id === user.id);
+              storedUsers[index].connected = user.connected;
+              storedUsers[index].name = user.name;
+              storedUsers[index].nearby = true;
+            }
+          })
+
+          this.setState({storedUsers:storedUsers, function(){
+               console.log('didmount storedUsers:',storedUsers );
+          }});
+        });
+        ///////
+
+
+        this.setState({storedUsers:storedUsers}, function(){
+   
+          // Get startUp params.
+          AsyncStorage.getItem('startup', (err, startup) => {
+            console.log('get startup params',startup);
+
+            if (err || startup===null) {
+              startup = this.state.startup;
+              AsyncStorage.setItem('startup', JSON.stringify(startup));
+            }
+            else {
+              startup = JSON.parse(startup);
+              this.setState({startup:startup}, function(){
+                console.log('get startup params state',this.state.startup);
+
+                if(this.state.startup.browseOnStart){
+                  this.browse();  // "WIFI", "BT", and "WIFI-BT"
+                  this.networkAnimationTimer = setTimeout( ()=>{this.stopBrowsing()}, 30*1000);
+                }
+
+                if(this.state.startup.advertiseOnStart){
+                  this.advertise();
+                  this.networkAnimationTimer = setTimeout( ()=>{this.stopAdvertising()}, 30*1000);
+                }
+              });
+            }
+
+            // Add item for me on firebase.
+            // database()
+            // .ref('/' + this.deviceId)
+            // .once("value", (snapshot)=>{
+          
+            //   if(snapshot!==null){
+                database()
+                .ref('/' + this.deviceId)
+                .set({  name:this.deviceName, invitations:false, messages:false,})
+                .then(() => {
+
+                  // Listen to pings.
+                  this.fbInvitationListner = database()
+                  .ref('/' + this.deviceId + '/areyourrellyonline' )
+                  .on('value', snapshot => { 
+
+                    // this.fbInvitationListner = database()
+                    // .ref('/' + this.deviceId + '/areyourrellyonline' )
+                    // .off();
+                    if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
+                      database()
+                      .ref('/' + this.deviceId + '/areyourrellyonline' )
+                      .set('yes_' + new Date());
+                    }
+                  });
+
+                  // Listen to peerlost.
+                  database()
+                  .ref('/')
+                  .on('child_removed', snapshot => {
+                    this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
+                  });
+
+                  // Listen to invitations.
+                  this.fbInvitationListner = database()
+                  .ref('/' + this.deviceId + '/invitations' )
+                  .on('child_added', snapshot => { 
+
+                    this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
+                  });
+
+                  // Listen to messages. TODO ?.. would be better to wait for connection.
+                  this.firebaseListner = database()
+                  .ref('/' + this.deviceId + '/messages')
+                  .on('child_changed', snapshot => { 
+
+                    console.log('Firebase message from ' + snapshot.key, snapshot.val() );
+                    this.receivedMessage({
+                      id: snapshot.key,
+                      message:snapshot.val(),
+                    }, true);
+                  });
+
+                  // once connected
+                  // // Listen for messages .
+                  // this.firebaseListner = database()
+                  // .ref('/' + this.deviceId )
+                  // .on('child_added', snapshot => { 
+
+                  //   console.log('fairebase message:', snapshot.val() );
+                  //   this.receivedMessage({
+                  //     id: snapshot.val().from,
+                  //     message:{
+                  //       key:snapshot.val().key,
+                  //       value:snapshot.val().value,
+                  //     }}, 
+                  //     snapshot.key);
+                  // });
+                });
+         //     }
+         //   });
+
+          }); // Get startUp params.
+
         });
       });
-    });
+
+
+      this.getAvailableStorages(false);
+      this.getBatteryInfo(false);
+    }); // get device id
+
 
   }
 
   componentWillUnmount() {
-    this.listener1.remove()
-    this.listener2.remove()
-    this.listener3.remove()
-    this.listener4.remove()
-    this.listener5.remove()
-    const devices  = this.state.devices;
-    this.state.devices.forEach(function(item, index){
-      if (item.connected && item.user.id != 'local'){
-        BluetoothCP.disconnectFromPeer(item.id);
-      }
-    });
+    console.log('componentWillUnmount');
+    // Delete listner.
+    database()
+    .ref('/')
+    .off();
+
+    database()
+    .ref('/' + this.deviceId )
+    .off();
+
+    // Delete me.
+    database()
+    .ref('/' + this.deviceId)
+    .remove();
 
     this.stopAdvertising();
     this.stopBrowsing();
+    if(this.listeners){
+      this.listener1.remove()
+      this.listener2.remove()
+      this.listener3.remove()
+      this.listener4.remove()
+      this.listener5.remove()
+    }
+
+    this.state.devices.forEach(function(item, index){
+      if (item.connected && item.user.id != 'local'){
+        this.disconnectFromPeer(item.id);
+        console.log('disconnectFromPeer',item.id );
+      }
+    });
+
+
+    console.log('END componentWillUnmount');
   }
 
 
   prevBatteryState = {level: 0, charging: false};
-  getBatteryInfo(){
+  getBatteryInfo(sendMessage){
     NativeModules.RNioPan.getBatteryInfo()
     .then((battery) => {
 
       if(this.prevBatteryState.level != battery.level
       || this.prevBatteryState.charging != battery.charging){
 
-        let devices = this.state.devices;
-        devices[0].distantBattery = battery;
-        this.setState({
-          devices: devices,
-        }, function(){
-          this.sendMessage('all', 'distantBattery', battery);
+        this.setState({devices: Object.assign([], this.state.devices, {0: {
+          ...this.state.devices[0],
+          distantBattery : battery,
+        }})}, function(){
+            if(sendMessage!==false){
+             this.sendMessage('all', 'distantBattery', battery);
+            }
         });
-      }
 
-      setTimeout(() => { this.getBatteryInfo() }, 60000);
+      }
+      setTimeout(() => { this.getBatteryInfo() }, 60*1000);
     })
   }
 
-  getAvailableStorages(){
+  getAvailableStorages(sendmessage){
     NativeModules.RNioPan.getStorages()
     .then((dirs) => {
       if(dirs.length) {
@@ -452,7 +524,10 @@ export default class App extends Component<Props> {
           });
           devices[0].distantStorage = maxSpaceId;
         }
-        this.sendMessage( 'all', 'distantStorage', devices[0].distantStorage);
+
+        if(sendmessage){
+          this.sendMessage( 'all', 'distantStorage', devices[0].distantStorage);
+        }
 
         this.setState({devices:devices}, function(){
 
@@ -490,10 +565,11 @@ export default class App extends Component<Props> {
 
   }
 
-
+  //------------------------------------------------------------------------
   //------------------------------------------------------------------------
   //            P2P communication
   //------------------------------------------------------------------------
+
   advertise(){
     if(!this.advertising){ // avoid launching anim more than once.
       this.advertising = true;
@@ -503,6 +579,7 @@ export default class App extends Component<Props> {
       }
     }
   }
+
   browse(){
     if(!this.browsing){
       this.browsing = true;
@@ -510,29 +587,102 @@ export default class App extends Component<Props> {
       if(!this.advertising){
         this.networkAnimation();
       }
+
+      //FireBase
+      // Get devices already there.
+      console.log('browsing from ' , this.deviceId)
+      database()
+      .ref('/')
+      .once('value', devices => {
+        devices.forEach((device)=>{
+  
+
+          if(device.key!=this.deviceId && device.val().name){
+
+            console.log(this.deviceId+'browsing ' , device.key)
+
+            // Ping to know if realy online.
+            database()
+            .ref('/'+device.key + '/areyourrellyonline/' )
+            .set('ping_'+this.deviceId)
+            .then(() => {
+
+              // Listen to ping response.
+              database()
+              .ref('/'+devices.key + '/areyourrellyonline/' )
+              .on('value', snapshot => {
+
+                if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
+
+                  database()
+                  .ref('/'+snapshot.key + '/areyourrellyonline/' )
+                  .off('value');
+
+                  this.PeerDetected({
+                    connected: false, 
+                    id: device.key, 
+                    name: device.val().name,
+                  }, true);     
+                }
+
+              });// Ping response
+            }); // set ping
+
+          } // if not me
+        }); // foreach devices 
+
+        // Listen for new comming friends.
+        database()
+        .ref('/')
+        .on('child_added', snapshot => {
+          // If not me.
+          if(snapshot.key!=this.deviceId && snapshot.val().name){
+            console.log(this.deviceName + ' finds', snapshot.key + ' ' + snapshot.val().name );
+
+            //Ping not needed here.
+            this.PeerDetected({
+              connected: false, 
+              id: snapshot.key, 
+              name: snapshot.val().name,
+            }, true);     
+
+          } // if not me
+        }); // on news child 
+
+      }); // get already there 
     }
   }
+
   stopAdvertising(){
     this.advertising = false;
     this.networkAnimationCanRun = false;
     BluetoothCP.stopAdvertising();
   }
+
   stopBrowsing(){
     this.browsing = false;
     this.networkAnimationCanRun = false;
     BluetoothCP.stopBrowsing();
+
+    database()
+    .ref('/')
+    .off('child_added');
   }
 
-  PeerDetected = (user) => {
+  disconnectFromPeer(id){
+    BluetoothCP.disconnectFromPeer(id);
+
+    // If ony connected via firebase delete dedicated messages item.
+    database().ref('/' + this.deviceId + '/messages/' .id).remove().then(() => {
+      this.PeerLost({id:id, connected:false});
+    });
+  }
+
+  PeerDetected = (user, fromFirebase) => {
     console.log('PeerDetected',user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
-    const storedUsers = this.state.storedUsers,
-          devices = this.state.devices;
 
-    // Check if not already present in list
-    if(this.getDeviceIndex(user.id)===false){
-      devices.push({...shareState, user:user});
-    }
+    const storedUsers = [...this.state.storedUsers];
 
     if(undefined===storedUsers.find(u => u.id === user.id)){
       // insert it
@@ -546,8 +696,10 @@ export default class App extends Component<Props> {
       storedUsers[index].nearby = true;
 
       // Auto connect if trusted
-      if(storedUsers[index].trusted == 1 && this.state.startup.connectTrustedOnStart){
-        this.connectTo(user.id);
+      if (this.state.startup.browseOnStart
+      && this.state.startup.connectTrustedOnStart
+      && storedUsers[index].trusted == 1){
+        this.sendInvitation(user, fromFirebase);
       }
     }
 
@@ -560,7 +712,6 @@ export default class App extends Component<Props> {
     }
 
     this.setState({
-      devices:devices,
       storedUser:storedUsers,
     });
   }
@@ -577,31 +728,35 @@ export default class App extends Component<Props> {
             stillNearby = nearbyUsers.findIndex(o => o.id === lostUser.id) > -1;
       // console.log(nearbyUser)
 
-      if(stillNearby){
-        console.log('still nearby');
-        devices[i].user = lostUser; // Disconnected.
-        storedUsers[index].connected = lostUser.connected;
-      }
-      else{
-        console.log('really lost');
+      if(i!==false) {
         devices.splice(i, 1);
+      }
 
-        // If trusted or banned, keep it in list.
-        if(storedUsers.find(o => o.id === lostUser.id).trusted!=0){
-          delete storedUsers[index].nearby;
-
-          // if trusted research it.
-          if(storedUsers.find(o => o.id === lostUser.id).trusted==1){
-            if(this.state.startup.advertiseOnStart) {
-              this.advertise();
-            }
-            if(this.state.startup.browseOnStart) {
-              this.browse();
-            }
+      if(index >-1){
+        if(stillNearby){
+          console.log('still nearby');
+          storedUsers[index].connected = lostUser.connected;
           }
         }
-        else{
-          storedUsers.splice(index, 1);
+        else {
+          console.log('really lost');
+          // If trusted or banned, keep it in list.
+          if(storedUsers[index].trusted!=0){
+            delete storedUsers[index].nearby;
+
+            // if trusted research it.
+            if(storedUsers[index].trusted==1){
+              if(this.state.startup.advertiseOnStart) {
+                this.advertise();
+              }
+              if(this.state.startup.browseOnStart) {
+                this.browse();
+              }
+            }
+          }
+          else{
+            storedUsers.splice(index, 1);
+          }
         }
       }
 
@@ -612,17 +767,31 @@ export default class App extends Component<Props> {
     });
   }
 
-  Connected = (user) => {
+  Connected = (user, firebase=false) => {
     console.log('Connected',user)
+
     // { "connected": true, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
-    // Update list of devices.
-    const devices = this.state.devices,
-          storedUsers = this.state.storedUsers;
+    const devices = [...this.state.devices],
+          storedUsers = [...this.state.storedUsers]
+          ;
 
-    devices[this.getDeviceIndex(user.id)].user = user;
+   console.log('storedUsers',storedUsers)
+
+
+    // Create db item for it
+    database().ref('/' + this.deviceId + '/messages/' + user.id).set('false').then(() => {
+
+    });
+
+
+    // Check if not already present in list
+    if(this.getDeviceIndex(user.id)===false){
+      devices.push({...shareState, user:user});
+    }
 
     const index = storedUsers.findIndex(o => o.id === user.id);
+    console.log('index',index)
     storedUsers[index].connected = true;//user.connected;
 
     this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
@@ -640,6 +809,8 @@ export default class App extends Component<Props> {
         this.sendMessage( user.id, 'fullShareSate', devices[0]);
       //}
     });
+
+
 
     // Create folder for that device on each avalable storage.
     this.getDevice('local').distantStorages.map((value) => {
@@ -666,25 +837,49 @@ export default class App extends Component<Props> {
     });
   }
 
-  gotInvitation = (user) => {
+  gotInvitation = (user, firebase=false) => {
     console.log('gotInvitation',user);
+
     const stored = this.state.storedUsers.find(o => o.id === user.id);
+
     if(stored && stored.trusted == 1  && this.state.startup.connectTrustedOnStart){
-      BluetoothCP.acceptInvitation(user.id);
+      // Trusted
       this.isMaster = false;
+      if(firebase){ 
+        database().ref('/' + this.deviceId + '/invitations/' + user.id).set('accepted').then(() => {
+          this.Connected({id:user.id, name:user.name, connected:true});
+        });
+      }
+      else{
+        BluetoothCP.acceptInvitation(user.id);
+      }
     }
+
     else if(stored && stored.trusted == -1){
-      // banned.
+      // Banned.
+      if(firebase){
+        database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+      }
     }
+
     else { 
-      // ask human user.
+      // Ask human user.
       Alert.alert(
-        this._t('gotInvitation') + '\n\n' + user.name,
+        user.name,
         'id: '+ user.id +'\n' + this._t('gotInvitation_msg'),
         [
           {
             text: this._t('connect'),
-            onPress: () => BluetoothCP.acceptInvitation(user.id)
+            onPress: () => {
+              this.isMaster = false;
+              if(firebase){
+                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('accepted');
+                this.Connected({id:user.id, name:user.name, connected:true});
+              }
+              else{
+                BluetoothCP.acceptInvitation(user.id);
+              }
+            }
           },
           // {
           //   text: this._t('connectAndAddToFavorites'), 
@@ -696,7 +891,12 @@ export default class App extends Component<Props> {
           {
             text: this._t('refuse'), 
             style: "cancel",
-            onPress: () => null
+            onPress: () => {
+              if(firebase){
+                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+              }
+            }
+            
           },
           // {
           //   text: this._t('refuseAndBan'), 
@@ -707,14 +907,45 @@ export default class App extends Component<Props> {
     }
   }
 
-  connectTo(id){
-    BluetoothCP.inviteUser(id);
+  sendInvitation(user, firebase=true){
+    console.log(this.deviceId+' sends ' + firebase + ' invitation to', user.id)
     this.isMaster = true;
+
+    if(firebase){
+      database()
+      .ref('/' + user.id + '/invitations/' + this.deviceId )
+      .set(this.deviceName)
+      .then(() => {
+
+        // Listen for response.
+        database()
+        .ref('/' + user.id + '/invitations/' + this.deviceId )
+        .on('value', snapshot => {
+
+          if(snapshot.val() != this.deviceName ){
+            database()
+            .ref('/' + user.id + '/invitations/' + this.deviceId )
+            .off()
+
+            if(snapshot.val() == 'accepted'){
+              //console.log('invitation response from' + user.id+ ' ' + snapshot.key ,snapshot.val() );
+              this.Connected({id:user.id, name:user.name , connected:true}, true);
+            }
+          }
+        });
+      });
+    }
+    else{
+      BluetoothCP.inviteUser(user.id);
+    }
   }
 
+
   sendMessage(userId, key, value){
-    // console.log('sendMessage to ', userId);
-    // console.log(key, value);
+    console.log('sendMessage to ', userId);
+    console.log('key',key,);
+    console.log('value', value);
+
     if(!userId) {
       return;
     }
@@ -726,17 +957,23 @@ export default class App extends Component<Props> {
         }
       });
     }
-    else {
-      userId = [userId]
+    else{
+      userId = [userId];
     }
 
+
     // Send message to distant device.
-    userId.forEach(function(uid, index){
+    userId.forEach((uid, index)=>{
+      console.log('send msg  this.deviceId', this.deviceId)
       BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), uid);
+      database().ref('/' + uid +  '/messages/' + this.deviceId).set({
+        key:key,
+        value:value,
+      });
     });
 
   
-    let devices = this.state.devices;
+    const devices = [...this.state.devices];
     if( key=='cmd'){
       // if(value=='distantCam' && this.state.distantCam) {
                 
@@ -767,15 +1004,15 @@ export default class App extends Component<Props> {
     }
   }
 
-  receivedMessage = (user) => {
-    // console.log('receivedMessage',msg);
+  receivedMessage(user, firebase) {
+
     if(this.getDeviceIndex(user.id) === false) {
       return false;
     }
 
-    const devices = this.state.devices,
-          msg = JSON.parse(user.message);
-
+    const devices = Object.assign([], this.state.devices),//[...this.state.devices],
+          msg = firebase ? user.message : JSON.parse(user.message);
+    // console.log('receivedMessage',msg);
     if(msg.key == 'txt') {
       Alert.alert(msg.value);
     }
@@ -827,11 +1064,17 @@ export default class App extends Component<Props> {
 
         this.refs.cam.camera.stopRecording();
       }
+    }
 
-      // else{
-      //   console.log('receivedMessage ELSE', msg.value)
-      //   this.setState({[msg.value]:!this.state[msg.value]});
-      // }
+    else if( msg.key == 'setStorage' ) { 
+      this.setStorage('local', msg.value);
+    }
+
+    else if( msg.key == 'setPreviewQuality' ) { 
+      devices[0].distantPreviewQuality = msg.value;
+      this.setState({ devices: devices }, function(){
+        this.sendMessage(user.id, 'distantPreviewQuality',  msg.value);
+      });
     }
 
     //
@@ -846,7 +1089,10 @@ export default class App extends Component<Props> {
         devices[this.getDeviceIndex(user.id)].previewing = true;
       }
 
+
+
       devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
+
       this.setState({devices:devices}, function(){
         // Preview automatically as soon as cam is on.
         if( msg.key == 'distantCam'){
@@ -863,16 +1109,7 @@ export default class App extends Component<Props> {
     //   this.setState({devices:devices});
     // }
 
-    else if( msg.key == 'setStorage' ) { 
-      this.setStorage('local', msg.value);
-    }
 
-    else if( msg.key == 'setPreviewQuality' ) { 
-      devices[0].distantPreviewQuality = msg.value;
-      this.setState({ devices: devices }, function(){
-        this.sendMessage(user.id, 'distantPreviewQuality',  msg.value);
-      });
-    }
 
     else if( msg.key == 'fullShareSate' ) { 
 
@@ -1048,7 +1285,7 @@ export default class App extends Component<Props> {
   }
 
   rotatePreview(device){
-    const devices = this.state.devices;
+    const devices = [...this.state.devices];
     devices[this.getDeviceIndex(device.user.id)].previewRotation 
     = (devices[this.getDeviceIndex(device.user.id)].previewRotation + 90)%360; 
 
@@ -1251,7 +1488,7 @@ export default class App extends Component<Props> {
   }
 
   setPreviewScale(userId,scale){
-        const devices = this.state.devices,
+        const devices = [...this.state.devices],
           deviceIndex = this.getDeviceIndex(userId);
 
         devices[deviceIndex].previewScale = scale;
@@ -1259,15 +1496,18 @@ export default class App extends Component<Props> {
   }
 
   toggleCam() { // Local cam.
-    const devices = this.state.devices;
-    devices[0].distantCam = !devices[0].distantCam;
-    this.setState({devices:devices}, function() {
-      this.sendMessage('all', 'distantCam', devices[0].distantCam);
+    const cam = !this.state.devices[0].distantCam;
+    this.setState({devices:  Object.assign([], this.state.devices, {0: {
+          ...this.state.devices[0],
+          distantCam : cam,
+        }})
+    }, function(){
+      this.sendMessage('all', 'distantCam', cam);
     });
   }
 
   togglePreview(userId) { // Distant cam.
-    const devices = this.state.devices,
+    const devices = [...this.state.devices],
           deviceIndex = this.getDeviceIndex(userId);
 
     devices[deviceIndex].previewing = !devices[deviceIndex].previewing;
@@ -1279,19 +1519,20 @@ export default class App extends Component<Props> {
   }
 
   toggleMask() {
-    const devices = this.state.devices;
-    devices[0].distantMask = !devices[0].distantMask;
-
-    if(devices[0].distantMask){
+    const mask = !this.state.devices[0].distantMask;
+    if(mask){
       NativeModules.RNioPan.hideNavigationBar();
     } 
     else{
       NativeModules.RNioPan.showNavigationBar();
     }
 
-
-    this.setState({devices:devices}, function(){
-      this.sendMessage('all', 'distantMask', devices[0].distantMask);
+    this.setState({devices:  Object.assign([], this.state.devices, {0: {
+          ...this.state.devices[0],
+          distantMask : mask,
+        }})
+    }, function(){
+      this.sendMessage('all', 'distantMask', mask);
     });
   }
 
@@ -1351,7 +1592,7 @@ export default class App extends Component<Props> {
   }
 
   setStorage(userId, index){
-    const devices = this.state.devices;
+    const devices = [...this.state.devices];
     devices[this.getDeviceIndex(userId)].distantStorage = index;
 
     this.setState({devices:devices, modalStorages:false}, function(){
@@ -1412,8 +1653,8 @@ export default class App extends Component<Props> {
                   onPress = { value.user.id=='local' 
                     ? null
                     : value.user.connected
-                      ? () => BluetoothCP.disconnectFromPeer(value.user.id)
-                      : () => this.connectTo(value.user.id)
+                      ? () => this.disconnectFromPeer(value.user.id)
+                      : () => this.sendInvitation(value.user)
                   }
                   >
                   <Text
@@ -1868,18 +2109,33 @@ export default class App extends Component<Props> {
                   alignSelf:'stretch',
                   paddingRight:40
                 }}
-                onPress={()=>this.setStartUpParam('connectTrustedOnStart', !this.state.startup.connectTrustedOnStart)}
+                onPress={
+                  !this.state.startup.browseOnStart && !this.state.startup.advertiseOnStart
+                  ? null
+                  : ()=>this.setStartUpParam('connectTrustedOnStart', !this.state.startup.connectTrustedOnStart)
+                }
                 >
                 <MaterialCommunityIcons
-                  name= {this.state.startup.connectTrustedOnStart ? "checkbox-marked" : "checkbox-blank-outline"}
+                  name= {
+                    this.state.startup.connectTrustedOnStart 
+                    && (this.state.startup.browseOnStart||this.state.startup.advertiseOnStart)
+                    ? "checkbox-marked" 
+                    : "checkbox-blank-outline"
+                  }
                   style={{ 
-                    color: colors.greenFlash, padding:5,
+                    color: !this.state.startup.browseOnStart && !this.state.startup.advertiseOnStart
+                      ? 'lightgrey'
+                      : colors.greenFlash, 
+                    padding:5,
                     backgroundColor:'transparent',
                   }}
                   size={25}
                 />
                 <Text style={{padding:5, fontSize:14, 
-                  color:'grey', backgroundColor:'white',}}>
+                  color: !this.state.startup.browseOnStart && !this.state.startup.advertiseOnStart
+                      ? 'lightgrey'
+                      : 'grey', 
+                  backgroundColor:'white',}}>
                   {this._t('connectTrustedOnStart')
                 }
                 </Text>
@@ -1919,8 +2175,8 @@ export default class App extends Component<Props> {
           }}
           onPress = { user.nearby
             ? user.connected
-              ? () => BluetoothCP.disconnectFromPeer(user.id)
-              : () => this.connectTo(user.id)
+              ? () => this.disconnectFromPeer(user.id)
+              : () => this.sendInvitation(user)
             : null
           }
           >
