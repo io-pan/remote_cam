@@ -321,7 +321,7 @@ export default class App extends Component<Props> {
 
         this.setState({storedUsers:storedUsers}, function(){
    
-          // Get startUp params.
+          // Get start-up params.
           AsyncStorage.getItem('startup', (err, startup) => {
             console.log('get startup params',startup);
 
@@ -347,15 +347,51 @@ export default class App extends Component<Props> {
             }
 
             // Firebase init.
+
+            /*
+            "$uid === auth.uid"
+            {
+              "rules": {
+                ".read": "auth != null",
+                //".write": "auth != null",
+                "$uid": {
+                    // Allow only authenticated content owners access to their data
+                    ".read": "auth != null && auth.uid == $uid",
+                    ".write": "auth != null && auth.uid == $uid",
+                      
+                    "ping": {
+                          // Allow only authenticated content owners access to their data
+                          ".read": "auth != null",// && auth.uid == $uid",
+                          ".write": "auth != null"// && auth.uid == $uid"
+                    },
+                    "invitations": {
+                      "$uid":{
+                          // Allow only authenticated content owners access to their data
+                          ".read": "auth != null && auth.uid == $uid",
+                          ".write": "auth != null && auth.uid == $uid"
+                      }
+                    },
+                    "messages": {
+                      "$uid":{
+                          // Allow only authenticated if path exists.
+                          ".write": "auth != null && auth.uid == $uid && data.exists()"
+                      }
+                    }
+                },
+
+              }
+            }
+            */
             this.firebaseauth = firebaseauth()
             .signInAnonymously()
-            .then((user) => {
-              console.log('User signed in anonymously',user);
+            .then((sg) => {
+              console.log('User signed in anonymously',sg);
               // s9 CWsf5lmVbqaC6SkpRyvLCQbcbqm2
               // s7 eZ9zEOk4oXOWbcGdhatycf4aaan1
 
-              this.firebaseId = user.uid;
+              this.firebaseId = sg.user.uid;
 
+this.deviceId=this.firebaseId;
               // Add item for me on firebase.
               // database()
               // .ref('/' + this.deviceId)
@@ -364,50 +400,53 @@ export default class App extends Component<Props> {
               //   if(snapshot!==null){
               database()
               .ref('/' + this.deviceId)
-              .set({  name:this.deviceName, invitations:false, messages:false,})
+              .set({ name:this.deviceName, invitations:false, messages:false,ping:false})
               .then(() => {
 
                 // Listen to pings.
-                database()
-                .ref('/' + this.deviceId + '/areyourrellyonline' )
-                .on('value', snapshot => { 
+                  database()
+                  .ref('/' + this.deviceId + '/ping' )
+                  .on('value', snapshot => { 
 
-                  // this.fbInvitationListner = database()
-                  // .ref('/' + this.deviceId + '/areyourrellyonline' )
-                  // .off();
-                  if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
-                    database()
-                    .ref('/' + this.deviceId + '/areyourrellyonline' )
-                    .set('yes_' + new Date());
-                  }
-                });
+                    // this.fbInvitationListner = database()
+                    // .ref('/' + this.deviceId + '/ping' )
+                    // .off();
+                    if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
+                      database()
+                      .ref('/' + this.deviceId + '/ping' )
+                      .set('yes_' + new Date());
+                    }
+                  });
 
-                // Listen to peerlost.
-                database()
-                .ref('/')
-                .on('child_removed', snapshot => {
-                  this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
-                });
+                  // Listen to invitations.
+                  this.fbInvitationListner = database()
+                  .ref('/' + this.deviceId + '/invitations' )
+                  .on('child_added', snapshot => { // TODO child add / change ....
+                    this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
+                  });
 
-                // Listen to invitations.
-                this.fbInvitationListner = database()
-                .ref('/' + this.deviceId + '/invitations' )
-                .on('child_added', snapshot => { // TODO child add / change ....
-                  this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
-                });
+                  // Listen to peerlost.
+                  database()
+                  .ref('/')
+                  .on('child_removed', snapshot => {
+                    this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
+                  });
 
-                // Listen to messages. TODO ?.. would be better to wait for connection.
-                this.firebaseListner = database()
-                .ref('/' + this.deviceId + '/messages')
-                .on('child_changed', snapshot => { 
 
-                  console.log('Firebase message from ' + snapshot.key, snapshot.val() );
-                  this.receivedMessage({
-                    id: snapshot.key,
-                    message:snapshot.val(),
-                  }, true);
-                });
+                  // Listen to messages. TODO ?.. would be better to wait for connection.
+                  this.firebaseListner = database()
+                  .ref('/' + this.deviceId + '/messages')
+                  .on('child_changed', snapshot => { 
 
+                    //console.log('Firebase message from ' + snapshot.key, snapshot.val() );
+                    this.receivedMessage({
+                      id: snapshot.key,
+                      message:snapshot.val(),
+                    }, true);
+                  });
+
+              }).catch(function(error) {
+                alert('Firebase write own item \n\n' + error.code + '\n' + error.message + '\n\n');
               });
        //     }
        //   });
@@ -586,28 +625,29 @@ export default class App extends Component<Props> {
       database()
       .ref('/')
       .once('value', devices => {
+
         devices.forEach((device)=>{
   
           console.log('firebase device' )
           if(device.key!=this.deviceId && device.val().name){
 
-            console.log(this.deviceId+'browsing ' , device.key)
+            console.log(this.deviceId+'pinging ' , device.key)
 
             // Ping to know if realy online.
             database()
-            .ref('/'+device.key + '/areyourrellyonline/' )
+            .ref('/'+device.key + '/ping/' )
             .set('ping_'+this.deviceId)
             .then(() => {
 
               // Listen to ping response.
               database()
-              .ref('/'+devices.key + '/areyourrellyonline/' )
+              .ref('/'+devices.key + '/ping/' )
               .on('value', snapshot => {
 
                 if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
 
                   database()
-                  .ref('/'+snapshot.key + '/areyourrellyonline/' )
+                  .ref('/'+snapshot.key + '/ping/' )
                   .off('value');
 
                   this.PeerDetected({
@@ -618,7 +658,9 @@ export default class App extends Component<Props> {
                 }
 
               });// Ping response
-            }); // set ping
+            }).catch(function(error) {
+              alert('set ping Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
+            });  // set ping
 
           } // if not me
         }); // foreach devices 
@@ -641,6 +683,8 @@ export default class App extends Component<Props> {
           } // if not me
         }); // on news child 
 
+      }).catch(function(error) {
+        alert('browsing Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
       }); // get already there 
     }
   }
@@ -671,19 +715,19 @@ export default class App extends Component<Props> {
 
       // Ping to know if realy online.
       database()
-      .ref('/' + user.id + '/areyourrellyonline/' )
+      .ref('/' + user.id + '/ping/' )
       .set('ping_' + this.deviceId)
       .then(() => {
 
         // Listen to ping response.
         database()
-        .ref('/' + user.id + '/areyourrellyonline/' )
+        .ref('/' + user.id + '/ping/' )
         .on('value', snapshot => {
 
           if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
 
             database()
-            .ref('/'+snapshot.key + '/areyourrellyonline/' )
+            .ref('/'+snapshot.key + '/ping/' )
             .off('value');
 
             this.PeerDetected({
@@ -916,7 +960,12 @@ export default class App extends Component<Props> {
           },
           {
             text: this._t('refuseAndBan'), 
-            onPress: () =>  this.storeUserStatus(user,-1)
+            onPress: () => { 
+              if(firebase){
+                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+              }
+              this.storeUserStatus(user,-1);
+            }
           },
         ],
       );
@@ -1006,8 +1055,9 @@ export default class App extends Component<Props> {
     }
   }
 
-  receivedMessage(user, firebase) {
-    console.log('receivedMessage from ' ,user.id );
+  receivedMessage(user, firebase=false) {
+    console.log('receivedMessage from ', user.id );
+    console.log('firebase' ,firebase);
 
     if(this.getDeviceIndex(user.id) === false) {
       return false;
@@ -1029,12 +1079,10 @@ export default class App extends Component<Props> {
 
       if(msg.value=='startRecording'){
         this.refs.cam.videoRequested = user.id;
-        // this.refs.cam.stopRecordRequested = false;
         this.refs.cam.refs.ActionButtons.stopRecordRequested = false;
         this.refs.cam.takeVideo();
       }
       else if(msg.value=='stopRecording'){
-        // this.refs.cam.stopRecordRequested = true;
         this.refs.cam.refs.ActionButtons.stopRecordRequested = true;
         this.refs.cam.camera.stopRecording();
       }
@@ -1052,27 +1100,27 @@ export default class App extends Component<Props> {
       this.toggleMask();
     }
 
-    else if(msg.key=='takeSnap' && this.refs.cam.refs.viewShotCam){
+    else if(msg.key=='takeSnap' && this.refs.cam && this.refs.cam.refs.viewShotCam){
       //this.refs.viewShot.capture().then(uri => {
       this.refs.cam.refs.viewShotCam.capture().then(uri => {
         this.sendMessage(user.id, 'snap', uri);
       });
     }
 
-    else if(msg.key == 'viewShot' && this.refs.cam.refs.viewShotCam){
+    else if(msg.key == 'takeViewShot' && this.refs.cam && this.refs.cam.refs.viewShotCam){
       // this.refs.viewShot.capture().then(uri => {
       this.refs.cam.refs.viewShotCam.capture().then(uri => {
         this.sendMessage(user.id, 'viewShot', uri);
       });
     }
 
-    else if(msg.key=='takePicture'){
+    else if(msg.key=='takePicture' && this.refs.cam){
       this.refs.cam.pictureRequested = user.id;
       this.refs.cam.takePicture();
     }
 
     else if(msg.key=='disconnect'){
-      this.PeerLost({id:user.id, connected:false});
+      this.disconnectFromPeer({id:user.id, connected:false});
     }
 
     else if( msg.key == 'setStorage' ) { 
@@ -1098,15 +1146,12 @@ export default class App extends Component<Props> {
         devices[this.getDeviceIndex(user.id)].previewing = true;
       }
 
-
-
       devices[this.getDeviceIndex(user.id)][msg.key] = msg.value;
-
       this.setState({devices:devices}, function(){
         // Preview automatically as soon as cam is on.
         if( msg.key == 'distantCam'){
 
-          this.sendMessage(user.id, 'viewShot', Date.now());
+          this.sendMessage(user.id, 'takeViewShot', Date.now());
         }
       });
     }
@@ -1129,7 +1174,6 @@ export default class App extends Component<Props> {
       this.setState({
         devices: devices,
       }, function(){
-
         // console.log('upd   ',this.state.devices)
       });
     }
@@ -1394,7 +1438,7 @@ export default class App extends Component<Props> {
                 }}
                 resizeMode={FastImage.resizeMode.contain}
                 // onLoad={e => console.log(e.nativeEvent.width, e.nativeEvent.height)}
-                onLoad={e => this.sendMessage(device.user.id, 'viewShot', Date.now())}
+                onLoad={e => this.sendMessage(device.user.id, 'takeViewShot', Date.now())}
               />
           }
           {!device.distantPreview1
@@ -1416,7 +1460,7 @@ export default class App extends Component<Props> {
                     priority: FastImage.priority.high ,
                 }}
                 resizeMode={FastImage.resizeMode.contain}
-                onLoad={e => this.sendMessage(device.user.id, 'viewShot', Date.now())}
+                onLoad={e => this.sendMessage(device.user.id, 'takeViewShot', Date.now())}
               />
           }
         </View>
@@ -1520,13 +1564,14 @@ export default class App extends Component<Props> {
   }
 
   togglePreview(userId) { // Distant cam.
+    console.log('togglePreview')
     const devices = [...this.state.devices],
           deviceIndex = this.getDeviceIndex(userId);
 
     devices[deviceIndex].previewing = !devices[deviceIndex].previewing;
     this.setState({devices:devices}, function(){
       if (devices[deviceIndex].previewing){
-        this.sendMessage(userId, 'viewShot', Date.now());
+        this.sendMessage(userId, 'takeViewShot', Date.now());
       }
     });
   }
@@ -2311,6 +2356,11 @@ export default class App extends Component<Props> {
   storeUserStatus(user, trusted){
     const storedUsers = this.state.storedUsers,
           index = storedUsers.findIndex(o => o.id === user.id);
+
+    if(index<0){
+      storedUsers.push(user);
+      index = storedUsers.length() - 1;
+    }
 
     if(trusted==1){
       storedUsers[index].trusted = storedUsers[index].trusted == 1 ? 0 : 1;
