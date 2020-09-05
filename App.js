@@ -206,8 +206,8 @@ export default class App extends Component<Props> {
         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
 
-        // PermissionsAndroid.PERMISSIONS.BLUETOOTH, // permission is null
-        // PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH, // permission is null
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
       ])
       if (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
       &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
@@ -235,6 +235,36 @@ export default class App extends Component<Props> {
 
     StatusBar.setHidden(true);
     SplashScreen.hide();
+
+   PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH, // permission is null
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+      ]).then((granted) => {
+        if (
+            granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.ACCESS_COARSE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.BLUETOOTH'] === PermissionsAndroid.RESULTS.GRANTED
+        &&  granted['android.permission.BLUETOOTH_ADMIN'] === PermissionsAndroid.RESULTS.GRANTED
+        ){
+           alert('PERMiSSION OK');
+        }
+        else {
+           alert('NO EPRMiSSION');
+          // Exit app.
+        }
+
+
 
     NativeModules.RNioPan.getDeviceId((deviceId)=>{
       this.bluetothId = deviceId.substr(0,16);
@@ -362,6 +392,7 @@ export default class App extends Component<Props> {
       this.getBatteryInfo(false);
     }); // get device id
 
+});
   }
 
   initFireBase(){   
@@ -745,6 +776,7 @@ export default class App extends Component<Props> {
   }
 
   PeerDetected = (user) => {
+    alert('peer')
     console.log('PeerDetected',user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
