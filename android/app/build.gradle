@@ -184,7 +184,9 @@ android {
 
 
 dependencies {
-    implementation fileTree(dir: "libs", include: ["*.jar"])
+//     implementation files('libs/commons-io-2.7.jar')
+// implementation 'org.apache.commons:commons-io:+'
+
     //noinspection GradleDynamicVersion
     implementation "com.facebook.react:react-native:+"  // From node_modules
 

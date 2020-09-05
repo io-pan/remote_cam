@@ -18,6 +18,7 @@ import { // Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 
+import Video from 'react-native-video';
 import AsyncStorage from '@react-native-community/async-storage';
 import Slider from '@react-native-community/slider';
 import RNFetchBlob from 'rn-fetch-blob';
@@ -1004,6 +1005,7 @@ export default class Cam extends Component<Props> {
               + date2folderName()
               + '.jpg'
             ;
+            this.lastvideofilename = filename;
             //console.log('dest',filename);
 
             RNFetchBlob.fs.mv(
@@ -1088,9 +1090,11 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
           + date2folderName()
           + '.mp4'
 
+        // this.lastvideofilename = filename;
+
         const promise = this.camera.recordAsync({
           path: filename,
-          maxDuration: this.motionActionVideo ? this.state.motionsetup.motionAction.videoLength : 60, // TODO param 60
+          maxDuration: this.motionActionVideo ? this.state.motionsetup.motionAction.videoLength : 60*5, // TODO param
 //orientation:"landscapeLeft"
           // quality // RNCamera.Constants.VideoQuality.2160p  ...
           // videoBitrate // 5*1000*1000 would be 5Mbps.
@@ -1364,12 +1368,18 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
         ref={cam => (this.camera = cam)}
         style = {[styles.cam,{width:previewWidth, height:previewHeight}]}
         onCameraReady = {this.onCameraReady}
+
         type={RNCamera.Constants.Type.back}
         flashMode={RNCamera.Constants.FlashMode.off}
         ratio="4:3"
         autoFocus ={RNCamera.Constants.AutoFocus.on}
         zoom={this.state.zoom}
 
+        // onPictureTaken={(q)=> this.onPictureTaken(q)}
+        // onTap={(q)=> this.onTap(q)}
+        // onRecordingStart = {(ers)=>this.onRecordingStart(ers)}
+        // onRecordingEnd= {(ers)=>this.onRecordingEnd(ers)}
+        
         motionDetectionMode={this.state.motionDetectionMode}
         onMotionDetected={this.onMotionDetected}
         
@@ -1422,14 +1432,165 @@ Type  Video Bitrate, Standard Frame Rate (24, 25, 30) Video Bitrate, High Frame 
         {this.renderMotion()}
         {/*this.renderFaces()*/}
        </RNCamera>
-    
+{/*
+<Video
+    //data:video/mp4;base64,
+    // data:video/webm;base64
+  // source={{ uri: 'http://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4' }}
+// source={{   uri: 'data:video/mp4;base64,' + this.vdata }}
+
+// source={{uri:'file:///storage/3562-6262/Android/data/com.remote_cam/files/local/2020-08-30_22-24-19.mp4?1'}}
+// KO source={{uri:'file://' +this.lastvideofilename}}
+
+  source={this.state.videosrc
+    ? this.state.videosrc
+    : { uri: 'http://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4' }
+  }
+
+  rate={1.0}
+  volume={1.0}
+  muted={false}
+  resizeMode="cover"
+  shouldPlay
+  controls={true}
+  isLooping
+  style={{ width: 300, height: 300 }}
+/>
+*/}
       </ViewShot>
     );
   }
 
+//   onTap(w){
+//     //console.log(w);
+//   }
+//   onPictureTaken(w){
+//     //console.log(w);
+//   }
+
+
+//   onRecordingEnd(w){
+//     clearInterval(this.mtimer);
+
+//     this.setState({
+//       videosrc:{uri:'file://'+this.lastvideofilename+'?100'}
+//     });
+//   }
+
+// cpt=0;
+// vdata="";
+// mtimer = null
+// async onRecordingStart(ers) {
+
+//   this.mtimer = setInterval(()=>{
+//     RNFetchBlob.fs.lstat(this.lastvideofilename)
+//     .then((stats) => {
+//       console.log('stats[0].size', this.cpt + ' ' + stats[0].size)
+//       // this.cpt++;
+//       // this.setState({
+//       //   videosrc:{uri:'file://'+this.lastvideofilename+'?'+this.cpt}
+//       // });
+//     })
+//     .catch((err) => {});
+//   },2000);
+
+//   const filename = '/storage/3562-6262/Android/data/com.remote_cam/files/local/2020-08-30_22-24-19.mp4';
+//   // const filename = this.lastvideofilename;
+//   console.log(filename);
+
+//   RNFetchBlob.fs.exists(filename).then(async (exists) => {
+  
+
+//     if(exists){
+//       console.log('exists',filename);
+
+
+//       RNFetchBlob.fs.readStream(filename, 'utf8')
+//       .then((stream) => {
+//           this.vdata = '';
+//           stream.open()
+//           stream.onData((chunk) => {
+//               console.log('chunk');
+//               this.vdata += chunk;
+//           })
+//           stream.onEnd(() => {
+//             alert('stream end')
+//             console.log('stremdata',this.vdata)
+//             // this.setState({
+//             //   videosrc:{uri:'file://'+this.lastvideofilename+'?'+this.cpt}
+//             // });
+//           })
+//       })
+
+//     }
+
+//   });
+
+// }
+
   onZoom(value){
     this.setState({zoom:value});
+
+    // return;
+
+    // const filename = '/storage/3562-6262/Android/data/com.remote_cam/files/local/2020-08-30_22-24-19.mp4';
+    // //this.lastvideofilename;
+    // console.log(filename);
+
+    // RNFetchBlob.fs.exists(filename).then(async (exists) => {
+    
+
+    //   if(exists){
+    //     this.vdata = "";
+    //     // voir aussi https://stackoverflow.com/questions/54348500/play-video-using-base64-encoded-string-in-react-native/54487670
+
+
+    //     // RNFetchBlob.fs.readStream(filename, 'base64')
+    //     // .then((stream) => {
+    //     //     this.vdata = '';
+    //     //     stream.open()
+
+    //     //     stream.onData((chunk) => {
+    //     //         // console.log('chunk');
+    //     //         this.vdata += chunk;
+    //     //     })
+
+    //     //     stream.onEnd(() => {
+    //     //       console.log('stream end')
+    //     //       // console.log('stremdata',this.vdata)
+    //     //         // {uri:'file://'+this.lastvideofilename+'?100'}
+    //     //         //{   uri: 'data:video/mp4;base64,' + this.vdata }
+    //     //         //{uri:'file:///storage/3562-6262/Android/data/com.remote_cam/files/local/2020-08-30_22-24-19.mp4?1'}
+    //     //       this.setState({
+    //     //         videosrc:
+    //     //         {uri: 'data:video/mp4;base64,' + this.vdata }
+    //     //       });
+    //     //     }) // onend
+    //     // });
+ 
+
+    //    /*
+    //    import RNFS from 'react-native-fs'
+    //   const downloadToFile = (base64Content, contentId) => {
+    //     const path = `file://${RNFS.DocumentDirectoryPath}/${contentId}.mp4`
+    //     RNFS.writeFile(path, base64Content, 'base64')
+    //     .then(success => {
+    //       console.log('FILE WRITTEN: ', versionId)
+    //     })
+    //     .catch(err => {
+    //       console.log('File Write Error: ', err.message)
+    //     })
+    //   }
+    //   Then in the video component, you can retrieve the file by its contentId:
+
+    //   <Video source={{ uri: `file://${RNFS.DocumentDirectoryPath}/${contentId}.mp4`}} />
+    //   */
+
+    //   }
+
+    // });
   };
+
 
   onMoveHandle(id, value){
     this.handles[id]=value;

@@ -60,6 +60,7 @@ npm install firebase --save
     npm install --save @react-native-firebase/app
 npm install --save @react-native-firebase/auth
 npm install --save @react-native-firebase/database
+npm install --save react-native-video
 
 ! duplicated class si onmet les 2 npm install --save @react-native-firebase/firestore
 

@@ -133,7 +133,6 @@ export default class App extends Component<Props> {
 
     this.stopRecordRequested = false;
 
-    this.isMaster = null;
     this.appWidth = 0;
 
     this.browsing = false;
@@ -141,7 +140,8 @@ export default class App extends Component<Props> {
     this.networkAnimationCanRun = true;
     this.networkAnimationTimer = null;
 
-    this.deviceId = null;
+    this.bluetothId = null;
+    this.firebaseId = null;
     this.deviceName = null;
     this.listeners=null;
   }
@@ -237,7 +237,7 @@ export default class App extends Component<Props> {
     SplashScreen.hide();
 
     NativeModules.RNioPan.getDeviceId((deviceId)=>{
-      this.deviceId = deviceId.substr(0,16);
+      this.bluetothId = deviceId.substr(0,16);
       this.deviceName = deviceId.substr(16);
       this.backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
           Alert.alert(
@@ -343,122 +343,14 @@ export default class App extends Component<Props> {
                   this.advertise();
                   this.networkAnimationTimer = setTimeout( ()=>{this.stopAdvertising()}, 30*1000);
                 }
+
+                // Firebase init.
+                if(this.state.startup.viaInternet){
+                  this.initFireBase();
+                }
+
               });
             }
-
-            // Firebase init.
-
-            /*
-            "$uid === auth.uid"
-            {
-              "rules": {
-                ".read": "auth != null",
-                //".write": "auth != null",
-                "$uid": {
-                    // Allow only authenticated content owners access to their data
-                    ".read": "auth != null && auth.uid == $uid",
-                    ".write": "auth != null && auth.uid == $uid",
-                      
-                    "ping": {
-                          // Allow only authenticated content owners access to their data
-                          ".read": "auth != null",// && auth.uid == $uid",
-                          ".write": "auth != null"// && auth.uid == $uid"
-                    },
-                    "invitations": {
-                      "$uid":{
-                          // Allow only authenticated content owners access to their data
-                          ".read": "auth != null && auth.uid == $uid",
-                          ".write": "auth != null && auth.uid == $uid"
-                      }
-                    },
-                    "messages": {
-                      "$uid":{
-                          // Allow only authenticated if path exists.
-                          ".write": "auth != null && auth.uid == $uid && data.exists()"
-                      }
-                    }
-                },
-
-              }
-            }
-            */
-            this.firebaseauth = firebaseauth()
-            .signInAnonymously()
-            .then((sg) => {
-              console.log('User signed in anonymously',sg);
-              // s9 CWsf5lmVbqaC6SkpRyvLCQbcbqm2
-              // s7 eZ9zEOk4oXOWbcGdhatycf4aaan1
-
-              this.firebaseId = sg.user.uid;
-
-this.deviceId=this.firebaseId;
-              // Add item for me on firebase.
-              // database()
-              // .ref('/' + this.deviceId)
-              // .once("value", (snapshot)=>{
-            
-              //   if(snapshot!==null){
-              database()
-              .ref('/' + this.deviceId)
-              .set({ name:this.deviceName, invitations:false, messages:false,ping:false})
-              .then(() => {
-
-                // Listen to pings.
-                  database()
-                  .ref('/' + this.deviceId + '/ping' )
-                  .on('value', snapshot => { 
-
-                    // this.fbInvitationListner = database()
-                    // .ref('/' + this.deviceId + '/ping' )
-                    // .off();
-                    if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
-                      database()
-                      .ref('/' + this.deviceId + '/ping' )
-                      .set('yes_' + new Date());
-                    }
-                  });
-
-                  // Listen to invitations.
-                  this.fbInvitationListner = database()
-                  .ref('/' + this.deviceId + '/invitations' )
-                  .on('child_added', snapshot => { // TODO child add / change ....
-                    this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
-                  });
-
-                  // Listen to peerlost.
-                  database()
-                  .ref('/')
-                  .on('child_removed', snapshot => {
-                    this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
-                  });
-
-
-                  // Listen to messages. TODO ?.. would be better to wait for connection.
-                  this.firebaseListner = database()
-                  .ref('/' + this.deviceId + '/messages')
-                  .on('child_changed', snapshot => { 
-
-                    //console.log('Firebase message from ' + snapshot.key, snapshot.val() );
-                    this.receivedMessage({
-                      id: snapshot.key,
-                      message:snapshot.val(),
-                    }, true);
-                  });
-
-              }).catch(function(error) {
-                alert('Firebase write own item \n\n' + error.code + '\n' + error.message + '\n\n');
-              });
-       //     }
-       //   });
-
-
-            })
-            .catch(error => {
-              if (error.code === 'auth/operation-not-allowed') {
-                console.log('Enable anonymous in your firebase console.');
-              }
-              console.error(error);
-            });
 
           }); // Get startUp params.
 
@@ -470,24 +362,132 @@ this.deviceId=this.firebaseId;
       this.getBatteryInfo(false);
     }); // get device id
 
+  }
 
+  initFireBase(){   
+    /*
+    https://firebase.google.com/docs/database/security/rules-conditions
+    {
+      "rules": {
+        ".read": "auth != null",
+        //".write": "auth != null",
+        "$uid": {
+            // Allow only authenticated content owners access to their data
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid",
+              
+            "ping": {
+                  // Allow only authenticated content owners access to their data
+                  ".read": "auth != null",// && auth.uid == $uid",
+                  ".write": "auth != null"// && auth.uid == $uid"
+            },
+            "invitations": {
+              "$uid":{
+                  // Allow only authenticated content owners access to their data
+                  ".read": "auth != null && auth.uid == $uid",
+                  ".write": "auth != null && auth.uid == $uid"
+              }
+            },
+            "messages": {
+              "$uid":{
+                  // Allow only authenticated if path exists.
+                  ".write": "auth != null && auth.uid == $uid && data.exists()"
+              }
+            }
+        },
+      }
+    }
+    */
+
+    this.firebaseauth = firebaseauth()
+    .signInAnonymously()
+    .then((sg) => {
+      console.log('User signed in anonymously',sg);
+      // s9 CWsf5lmVbqaC6SkpRyvLCQbcbqm2
+      // s7 eZ9zEOk4oXOWbcGdhatycf4aaan1
+
+
+      this.firebaseId = sg.user.uid;
+
+// this.bluetothId=this.firebaseId;
+
+      // Add me on firebase.
+      database()
+      .ref('/' + this.firebaseId)
+      .set({ name:this.deviceName, invitations:false, messages:false,ping:false})
+      .then(() => {
+
+        // Set own ping.
+        database()
+        .ref('/' + this.firebaseId + '/ping' )
+        .set('yes_' + new Date());
+
+        // Listen to pings.
+        database()
+        .ref('/' + this.firebaseId + '/ping' )
+        .on('value', snapshot => { 
+
+          // this.fbInvitationListner = database()
+          // .ref('/' + this.firebaseId + '/ping' )
+          // .off();
+          if(snapshot.val() && snapshot.val().indexOf('ping_') == 0){
+            database()
+            .ref('/' + this.firebaseId + '/ping' )
+            .set('yes_' + new Date());
+          }
+        });
+
+        // Listen to invitations.
+        database()
+        .ref('/' + this.firebaseId + '/invitations' )
+        .on('child_added', snapshot => {
+          this.gotInvitation({id:snapshot.key, name:snapshot.val()}, true);
+        });
+
+        // Listen to peerlost.
+        database()
+        .ref('/')
+        .on('child_removed', snapshot => {
+          this.PeerLost({id:snapshot.key, name:snapshot.val().name, connected:false});
+        });
+
+
+      }).catch(function(error) {
+        alert('Firebase write own item \n\n' + error.code + '\n' + error.message + '\n\n');
+      });
+
+    })
+    .catch(error => {
+      if (error.code === 'auth/operation-not-allowed') {
+        console.log('Enable anonymous in your firebase console.');
+      }
+      console.error(error);
+    });
+  }
+
+  closeFireBase(){
+    // Stop listening.
+    database().ref('/' + this.firebaseId + '/ping' ).off();
+    database().ref('/' + this.firebaseId + '/invitations' ).off();
+    database().ref('/' + this.firebaseId + '/messages').off();
+    database().ref('/').off();
+    // Delete me.
+    database().ref('/' + this.firebaseId).remove();
+
+    // firebaseauth() // TODO ?
+    // .signOut()
+    // .then((sg) => {
+    //   console.log('User signed out ',sg);
+    //   this.firebaseId = null;
+    // });
   }
 
   componentWillUnmount() {
     console.log('componentWillUnmount');
-    // Delete listner.
-    database()
-    .ref('/')
-    .off();
 
-    database()
-    .ref('/' + this.deviceId )
-    .off();
-
-    // Delete me.
-    database()
-    .ref('/' + this.deviceId)
-    .remove();
+    if(this.state.startup.viaInternet){
+      this.closeFireBase();
+    }
 
     this.stopAdvertising();
     this.stopBrowsing();
@@ -619,73 +619,105 @@ this.deviceId=this.firebaseId;
         this.networkAnimation();
       }
 
-      //FireBase
-      // Get devices already there.
-      console.log('browsing from ' , this.deviceId)
-      database()
-      .ref('/')
-      .once('value', devices => {
+      //FireBase.
+      if(this.state.startup.viaInternet){
+        // // Get devices already there.
+        // console.log('browsing from ' , this.bluetothId + ' ' + this.firebaseId)
+        // database()
+        // .ref('/')
+        // .once('value', devices => {
 
-        devices.forEach((device)=>{
-  
-          console.log('firebase device' )
-          if(device.key!=this.deviceId && device.val().name){
+        //   devices.forEach((device)=>{
+    
+        //     console.log('firebase device' )
+        //     if(device.key!=this.firebaseId && device.val().name){
 
-            console.log(this.deviceId+'pinging ' , device.key)
+        //       console.log(this.firebaseId+'pinging ' , device.key)
 
-            // Ping to know if realy online.
-            database()
-            .ref('/'+device.key + '/ping/' )
-            .set('ping_'+this.deviceId)
-            .then(() => {
+        //       // Ping to know if realy online.
+        //       database()
+        //       .ref('/'+device.key + '/ping/' )
+        //       .set('ping_'+this.firebaseId)
+        //       .then(() => {
 
-              // Listen to ping response.
+        //         // Listen to ping response.
+        //         database()
+        //         .ref('/'+devices.key + '/ping/' )
+        //         .on('value', snapshot => {
+
+        //           if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
+
+        //             database()
+        //             .ref('/'+snapshot.key + '/ping/' )
+        //             .off('value');
+
+        //             this.PeerDetected({
+        //               nearby: true, 
+        //               id: device.key, 
+        //               name: device.val().name,
+        //             });     
+        //           }
+
+        //         });// Ping response
+        //       }).catch(function(error) {
+        //         alert('set ping Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
+        //       });  // set ping
+
+        //     } // if not me
+        //   }); // foreach devices 
+
+          // Listen for new comming friends.
+          database()
+          .ref('/')
+          .on('child_added', device => {
+            // If not me.
+            if(device.key!=this.firebaseId && device.val().name){
+              console.log(this.deviceName + ' finds', device.key + ' ' + device.val().name );
+
+
+              // Ping to know if realy online.
               database()
-              .ref('/'+devices.key + '/ping/' )
-              .on('value', snapshot => {
+              .ref('/'+device.key + '/ping/' )
+              .set('ping_'+this.firebaseId)
+              .then(() => {
 
-                if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
+                // Listen to ping response.
+                database()
+                .ref('/'+device.key + '/ping/' )
+                .on('value', snapshot => {
 
-                  database()
-                  .ref('/'+snapshot.key + '/ping/' )
-                  .off('value');
+                  if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
 
-                  this.PeerDetected({
-                    connected: false, 
-                    id: device.key, 
-                    name: device.val().name,
-                  }, true);     
-                }
+                    database()
+                    .ref('/'+snapshot.key + '/ping/' )
+                    .off('value');
 
-              });// Ping response
-            }).catch(function(error) {
-              alert('set ping Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
-            });  // set ping
+                    this.PeerDetected({
+                      nearby: true, 
+                      id: device.key, 
+                      name: device.val().name,
+                    });     
+                  }
 
-          } // if not me
-        }); // foreach devices 
+                });// Ping response
+              }).catch(function(error) {
+                alert('set ping Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
+              });  // set ping
 
-        // Listen for new comming friends.
-        database()
-        .ref('/')
-        .on('child_added', snapshot => {
-          // If not me.
-          if(snapshot.key!=this.deviceId && snapshot.val().name){
-            console.log(this.deviceName + ' finds', snapshot.key + ' ' + snapshot.val().name );
+              // //Ping not needed here.
+              // this.PeerDetected({
+              //   nearby: true, 
+              //   id: snapshot.key, 
+              //   name: snapshot.val().name,
+              // });     
 
-            //Ping not needed here.
-            this.PeerDetected({
-              connected: false, 
-              id: snapshot.key, 
-              name: snapshot.val().name,
-            }, true);     
+            } // if not me
+          }); // on news child 
 
-          } // if not me
-        }); // on news child 
-
-      }).catch(function(error) {
-        alert('browsing Firebase LOGIN ERROR \n\n' + error.code + '\n' + error.message + '\n\n');
-      }); // get already there 
+        // }).catch(function(error) {
+        //   alert('browsing Firebase'+  +'\n\n' + error.code + '\n' + error.message + '\n\n');
+        // }); // get already there 
+      }
     }
   }
 
@@ -708,41 +740,11 @@ this.deviceId=this.firebaseId;
   disconnectFromPeer(user){
     BluetoothCP.disconnectFromPeer(user.id);
 
-    // If ony connected via firebase delete dedicated messages item.
-    database().ref('/' + this.deviceId + '/messages/' + user.id).remove().then(() => {
-      this.PeerLost({id:user.id, connected:false});
-      this.sendMessage( user.id, 'disconnect', Date.now());
-
-      // Ping to know if realy online.
-      database()
-      .ref('/' + user.id + '/ping/' )
-      .set('ping_' + this.deviceId)
-      .then(() => {
-
-        // Listen to ping response.
-        database()
-        .ref('/' + user.id + '/ping/' )
-        .on('value', snapshot => {
-
-          if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
-
-            database()
-            .ref('/'+snapshot.key + '/ping/' )
-            .off('value');
-
-            this.PeerDetected({
-              connected: false, 
-              id: user.id, 
-              name: user.name,
-            }, true);     
-          }
-
-        });// Ping response
-      }); // set ping
-    });
+    this.PeerLost({id:user.id, name:user.name, connected:false});
+    this.sendMessage( user.id, 'disconnect', Date.now());
   }
 
-  PeerDetected = (user, fromFirebase) => {
+  PeerDetected = (user) => {
     console.log('PeerDetected',user)
     //{ "connected": false, "id": "7ea7b6331ab5c39e", "name": "ioS7", "type": "offline"}
 
@@ -759,15 +761,17 @@ this.deviceId=this.firebaseId;
       console.log(' update with connected info');
       // update with connected info.
       const index = storedUsers.findIndex(u => u.id === user.id);
-      storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}
-      storedUsers[index].name = user.name;
-      storedUsers[index].nearby = true;
+      // storedUsers[index].connected = user.connected; //{...storedUsers[index], ...user}ioio
+      // storedUsers[index].name = user.name;
+      //storedUsers[index].nearby = true;
+      storedUsers[index] = {...storedUsers[index], ...user};
 
-      // Auto connect if trusted
-      if (this.state.startup.browseOnStart
+      // Auto connect if trusted 
+      if (!storedUsers[index].connected
+      && this.state.startup.browseOnStart
       && this.state.startup.connectTrustedOnStart
       && storedUsers[index].trusted == 1){
-        this.sendInvitation(user, fromFirebase);
+        this.sendInvitation(user);
       }
     }
 
@@ -785,8 +789,45 @@ this.deviceId=this.firebaseId;
   PeerLost = (lostUser) => {
     console.log('PeerLost',lostUser);
 
-    // delete db item for it
-    database().ref('/' + this.deviceId + '/messages/' + lostUser.id).remove().then(() => {});
+    if(this.state.startup.viaInternet){
+      // If ony connected via firebase delete dedicated messages item.
+      database().ref('/' + this.firebaseId + '/messages/' + lostUser.id).remove().then(() => {
+        // Ping to know if it is only a deconnection a a real lost.
+        database()
+        .ref('/' + lostUser.id + '/ping/' )
+        .set('ping_' + this.bluetothId)
+        .then(() => {
+
+            this.PeerDetected({
+              nearby: false,
+              connected: false, 
+              id: lostUser.id, 
+              name: lostUser.name,
+            }, true);  
+
+          // Listen to ping response.
+          database()
+          .ref('/' + lostUser.id + '/ping/' )
+          .on('value', snapshot => {
+
+            if(snapshot && snapshot.val() && snapshot.val().split('_')[0]=='yes'){
+
+              database()
+              .ref('/'+snapshot.key + '/ping/' )
+              .off('value');
+
+              this.PeerDetected({
+                nearby: true,
+                connected: false, 
+                id: lostUser.id, 
+                name: lostUser.name,
+              }, true);     
+            }
+
+          });// Ping response
+        }); // set ping
+      });
+    }
 
     // Check if it is only a logout or a real lost.
     BluetoothCP.getNearbyPeers((nearbyUsers)=>{
@@ -831,8 +872,22 @@ this.deviceId=this.firebaseId;
       this.setState({
         devices:devices,
         storedUsers:storedUsers,
+      }, function(){
+        if(this.state.startup.browseOnStart){
+          this.browse();  // "WIFI", "BT", and "WIFI-BT"
+          this.networkAnimationTimer = setTimeout( ()=>{this.stopBrowsing()}, 30*1000);
+        }
+
+        if(this.state.startup.advertiseOnStart){
+          this.advertise();
+          this.networkAnimationTimer = setTimeout( ()=>{this.stopAdvertising()}, 30*1000);
+        }
       })
     });
+  }
+
+  getNearbyPeers(callback){
+
   }
 
   Connected = (user, firebase=false) => {
@@ -844,37 +899,28 @@ this.deviceId=this.firebaseId;
           storedUsers = [...this.state.storedUsers]
           ;
 
-   console.log('storedUsers',storedUsers)
+    // console.log('storedUsers',storedUsers)
 
+    // Check if not already present in list
+    if(this.getDeviceIndex(user.id)===false){
+      devices.push({...shareState, user:user});
+    }
 
-    // Create db item for it
-    database().ref('/' + this.deviceId + '/messages/' + user.id).set('false').then(() => {
+    const index = storedUsers.findIndex(o => o.id === user.id);
+    console.log('index',index)
+    if(index >-1 ){
+      storedUsers[index].connected = true;//user.connected;
+    }
 
-      // Check if not already present in list
-      if(this.getDeviceIndex(user.id)===false){
-        devices.push({...shareState, user:user});
-      }
-
-      const index = storedUsers.findIndex(o => o.id === user.id);
-      console.log('index',index)
-      if(index>-1){
-        storedUsers[index].connected = true;//user.connected;
-      }
-
-
-      this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
-        // Tell  about me.
-        this.sendMessage( user.id, 'fullShareSate', devices[0]);
-      });
+    this.setState({ devices:devices ,storedUsers:storedUsers}, function(){
+      // Tell  about me.
+      
+      // wait for db folder to be created.
+      this.sendMessage( user.id, 'fullShareSate', devices[0]);
     });
 
-
-
-
-
-    // Create folder for that device on each avalable storage.
+    // Create folder for that device on each available storage.
     this.getDevice('local').distantStorages.map((value) => {
-
       RNFetchBlob.fs.isDir(value.path + '/' + user.name.replace(/ /g, "-"))
       .then((isDir) => {
         if(!isDir){
@@ -893,9 +939,10 @@ this.deviceId=this.firebaseId;
           })
         }
       })
-
     });
+
   }
+
 
   gotInvitation = (user, firebase=false) => {
     console.log('gotInvitation',user);
@@ -904,11 +951,32 @@ this.deviceId=this.firebaseId;
 
     if(stored && stored.trusted == 1  && this.state.startup.connectTrustedOnStart){
       // Trusted
-      this.isMaster = false;
-      if(firebase){ 
-        database().ref('/' + this.deviceId + '/invitations/' + user.id).set('accepted').then(() => {
-          this.Connected({id:user.id, name:user.name, connected:true});
-        });
+
+      // Create db message item for it.
+      if(firebase){//this.state.startup.viaInternet
+        database().ref('/' + this.firebaseId + '/messages/' + user.id).set('false').then(() => {
+
+          // Listen to messages.
+          database()
+          .ref('/' + this.firebaseId + '/messages')
+          .on('child_changed', snapshot => { 
+            // console.log('Firebase message from ' + snapshot.key, snapshot.val() );
+            this.receivedMessage({
+              id: snapshot.key,
+              message:snapshot.val(),
+            }, true);
+          });
+
+          // Send accepted invitation.
+          database()
+          .ref('/' + this.firebaseId + '/invitations/' + user.id)
+          .set('accepted').then(() => {
+            alert('accepted set');
+            this.Connected({id:user.id, name:user.name, connected:true}, true);
+          });
+
+        }); // create db item.
+        
       }
       else{
         BluetoothCP.acceptInvitation(user.id);
@@ -918,7 +986,7 @@ this.deviceId=this.firebaseId;
     else if(stored && stored.trusted == -1){
       // Banned.
       if(firebase){
-        database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+        database().ref('/' + this.firebaseId + '/invitations/' + user.id).set('refused');
       }
     }
 
@@ -931,10 +999,29 @@ this.deviceId=this.firebaseId;
           {
             text: this._t('connect'),
             onPress: () => {
-              this.isMaster = false;
-              if(firebase){
-                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('accepted');
-                this.Connected({id:user.id, name:user.name, connected:true});
+              // Create db message item for it.
+              if(firebase){//this.state.startup.viaInternet
+                database().ref('/' + this.firebaseId + '/messages/' + user.id).set('false').then(() => {
+
+                  // Listen to messages.
+                  database()
+                  .ref('/' + this.firebaseId + '/messages')
+                  .on('child_changed', snapshot => { 
+                    // console.log('Firebase message from ' + snapshot.key, snapshot.val() );
+                    this.receivedMessage({
+                      id: snapshot.key,
+                      message:snapshot.val(),
+                    }, true);
+                  });
+
+                  // Send accepted invitation.
+                  database()
+                  .ref('/' + this.firebaseId + '/invitations/' + user.id)
+                  .set('accepted').then(() => {
+                    this.Connected({id:user.id, name:user.name, connected:true}, true);
+                  });
+
+                }); // create db item.
               }
               else{
                 BluetoothCP.acceptInvitation(user.id);
@@ -953,7 +1040,7 @@ this.deviceId=this.firebaseId;
             style: "cancel",
             onPress: () => {
               if(firebase){
-                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+                database().ref('/' + this.firebaseId + '/invitations/' + user.id).set('refused');
               }
             }
             
@@ -962,7 +1049,7 @@ this.deviceId=this.firebaseId;
             text: this._t('refuseAndBan'), 
             onPress: () => { 
               if(firebase){
-                database().ref('/' + this.deviceId + '/invitations/' + user.id).set('refused');
+                database().ref('/' + this.firebaseId + '/invitations/' + user.id).set('refused');
               }
               this.storeUserStatus(user,-1);
             }
@@ -972,41 +1059,61 @@ this.deviceId=this.firebaseId;
     }
   }
 
-  sendInvitation(user, firebase=true){
-    console.log(this.deviceId+' sends ' + firebase + ' invitation to', user.id)
-    this.isMaster = true;
+  sendInvitation(user){
+    console.log(this.bluetothId +' - '+ this.firebaseId + ' sends invitation to', user.id);
 
-    if(firebase){
+    if(user.id.length == 28){
       database()
-      .ref('/' + user.id + '/invitations/' + this.deviceId )
+      .ref('/' + user.id + '/invitations/' + this.firebaseId )
       .set(this.deviceName)
       .then(() => {
+                // Set message item for it.
+                database().ref('/' + this.firebaseId + '/messages/' + user.id).set('false').then(() => {
+
+                  // Listen to messages.
+                  database()
+                  .ref('/' + this.firebaseId + '/messages')
+                  .off();
+                  
+                  database()
+                  .ref('/' + this.firebaseId + '/messages')
+                  .on('child_changed', snapshot => { 
+                    console.log('sendInvitation child_changed  ' + snapshot.key, snapshot.val() );
+                    this.receivedMessage({
+                      id: snapshot.key,
+                      message:snapshot.val(),
+                    }, true);
+                  });
+
+                }); // create db item.
 
         // Listen for response.
         database()
-        .ref('/' + user.id + '/invitations/' + this.deviceId )
+        .ref('/' + user.id + '/invitations/' + this.firebaseId )
         .on('value', snapshot => {
 
           if(snapshot.val() != this.deviceName ){
             // Delete invitation
-            database()
-            .ref('/' + user.id + '/invitations/' + this.deviceId )
-            .off();
-
-            database().ref('/' + user.id + '/invitations/' + this.deviceId ).remove();
-
+            database().ref('/' + user.id + '/invitations/' + this.firebaseId ).off();
+            database().ref('/' + user.id + '/invitations/' + this.firebaseId ).remove();
             if(snapshot.val() == 'accepted'){
               //console.log('invitation response from' + user.id+ ' ' + snapshot.key ,snapshot.val() );
+
+
               this.Connected({id:user.id, name:user.name , connected:true}, true);
             }
             else {//if(snapshot.val() == 'refused'){
-              Alert.alert(this._t('connectionRejected'));
+              Alert.alert(this._t('connectionRejected') + ' ' + user.name + ' '+snapshot.val());
+              database().ref('/' + this.firebaseId + '/messages/' + user.id).remove();
             }
           }
         });
+
+      }).catch(function(error) {
+        alert('Firebase set invitation '+ '/' + user.id + '/invitations/' + this.firebaseId +'\n\n' + error.code + '\n' + error.message + '\n\n');
       });
     }
-    else{
+    else if(user.id.length == 16){
       BluetoothCP.inviteUser(user.id);
     }
   }
@@ -1035,12 +1142,16 @@ this.deviceId=this.firebaseId;
 
     // Send message to distant device.
     userId.forEach((uid, index)=>{
-      console.log('send msg  this.deviceId', this.deviceId)
-      BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), uid);
-      database().ref('/' + uid +  '/messages/' + this.deviceId).set({
-        key:key,
-        value:value,
-      });
+      console.log('send msg  this.bluetothId', this.bluetothId)
+      if(uid.length == 16){
+        BluetoothCP.sendMessage(JSON.stringify({key:key , value:value }), uid);
+      }
+      else if(uid.length == 28){
+        database().ref('/' + uid +  '/messages/' + this.firebaseId).set({
+          key:key,
+          value:value,
+        });
+      }
     });
 
   
@@ -2009,6 +2120,8 @@ this.deviceId=this.firebaseId;
           renderItem={({ item }) => this.renderUser(item)}
 
           ListHeaderComponent={
+            <View style={{ paddingLeft:20, paddingRight:20,
+            }}>
             <View
               style={{ backgroundColor:colors.lightBackGround,
                   flexDirection:'row',
@@ -2038,6 +2151,34 @@ this.deviceId=this.firebaseId;
                   height:40}}
                 />
               </View>  
+
+              </View>
+              <TouchableOpacity 
+                style={{
+                  marginBottom:20,
+                  flexDirection:'row',
+                  alignItems:'center',
+                  backgroundColor:'white', 
+                  borderColor:'lightgrey', borderWidth:1, padding:1,
+                  alignSelf:'stretch',
+                  paddingRight:40
+                }} 
+                onPress={()=>this.setStartUpParam('viaInternet', !this.state.startup.viaInternet)}
+                >
+                <MaterialCommunityIcons
+                  name= {this.state.startup.viaInternet ? "checkbox-marked" : "checkbox-blank-outline"}
+                  style={{ 
+                    color: colors.greenFlash, margin:5,
+                    backgroundColor:'transparent',
+                  
+                  }}
+                  size={25}
+                />
+                <Text style={{padding:5, fontSize:14, 
+                  color:'grey', backgroundColor:'white',}}>
+                  {this._t('viaInternet')}
+                </Text>
+              </TouchableOpacity> 
             </View>      
           }
 
@@ -2212,6 +2353,15 @@ this.deviceId=this.firebaseId;
   setStartUpParam(key, value){
     this.setState({startup:{...this.state.startup, [key]:value}}, function(){
       AsyncStorage.setItem('startup', JSON.stringify(this.state.startup));
+
+      if(key=='viaInternet'){
+        if(value){
+          this.initFireBase();
+        }
+        else{
+          this.closeFireBase();
+        }
+      }
     });
   }
 
@@ -2354,7 +2504,7 @@ this.deviceId=this.firebaseId;
   }
 
   storeUserStatus(user, trusted){
-    const storedUsers = this.state.storedUsers,
+    const storedUsers = [...this.state.storedUsers],
           index = storedUsers.findIndex(o => o.id === user.id);
 
     if(index<0){
@@ -2374,10 +2524,10 @@ this.deviceId=this.firebaseId;
 
     this.setState({ storedUsers:storedUsers } , function(){
       const o = JSON.parse(JSON.stringify(storedUsers))
-      if(trusted!=0){
+      //if(trusted!=0){
         delete o[index].nearby;
         delete o[index].connected;
-      }
+      //}
       AsyncStorage.setItem('storedUsers', JSON.stringify(o));
     });
   }
@@ -2440,7 +2590,10 @@ this.deviceId=this.firebaseId;
           +'Pour une performance optimale, vous devez n\'avoir qu\'un seul serveur (l\'appareil qui effectue la recherche) '
           +'et un ou plusieurs clients (les appareils qui se rendent visibles).'
       },
-
+      viaInternet:{
+        en:'Connect via internet',
+        fr:'Connection via internet',
+      },
       gotInvitation:{
         en:'Connection request',
         fr:'Demande de connection',
@@ -2466,10 +2619,9 @@ this.deviceId=this.firebaseId;
         fr:'Refuser et bannir',
       },
       connectionRejected:{
-        en:'Connection rejected',
-        fr:'Connection refusée',
+        en:'Connection rejected by',
+        fr:'Connection refusée par',
       },
-
        
     }
 

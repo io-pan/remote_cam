@@ -24,6 +24,7 @@
     "react-native-keep-screen-on": "^1.2.0",
     "react-native-svg": "^12.1.0",
     "react-native-vector-icons": "^7.0.0",
+    "react-native-video": "^5.1.0-alpha8",
     "react-native-view-shot": "^3.1.2",
     "rn-fetch-blob": "^0.12.0",
     "rn-splash-screen": "^5.2.0"
